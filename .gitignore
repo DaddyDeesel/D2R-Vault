@@ -5,6 +5,7 @@ build/
 dist/
 *.spec
 data/*.db
+data/settings.json
 data/backups/*.db
 data/captures/
 logs/*.log
