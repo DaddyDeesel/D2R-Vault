@@ -1,16 +1,8 @@
-"""
-D2R Vault — tooltip region detection.
+"""D2R Vault — tooltip region detection.
 
-Three modes per spec §9:
-  - Fixed Region: user-specified rectangle, always used as-is (most
-    reliable; recommended default and starting point per the build
-    spec's final instruction).
-  - Manual Selection: same as Fixed Region but captured once via a
-    selection UI, then stored as a fixed region.
-  - Automatic: attempts to locate a tooltip-like rectangle in a full
-    screenshot using basic image heuristics (text density + dark
-    panel detection). Best-effort; falls back to a centered default
-    region if nothing is found.
+Automatic mode searches for a dense block of tooltip text in the captured D2R
+client area. Fixed/Manual remain available for users who prefer an explicit
+rectangle.
 """
 from __future__ import annotations
 
@@ -21,64 +13,86 @@ from app.capture.screen_capture import CaptureRegion
 
 
 def detect_fixed_region(region_settings: dict) -> CaptureRegion:
-    return CaptureRegion(
-        x=region_settings.get("x", 0),
-        y=region_settings.get("y", 0),
-        width=region_settings.get("width", 400),
-        height=region_settings.get("height", 300),
-    )
+    return CaptureRegion(x=region_settings.get("x", 0), y=region_settings.get("y", 0),
+                         width=region_settings.get("width", 400), height=region_settings.get("height", 300))
 
 
-def detect_automatic(full_screenshot: Image.Image) -> CaptureRegion:
-    """Heuristic tooltip finder: D2R tooltips are dark rectangular
-    panels with a border and a cluster of light-colored text. We look
-    for a region with high local contrast and a dark, roughly-uniform
-    background — good enough as a first pass; the spec explicitly
-    allows starting with a configurable region and improving this
-    later (§9, final instructions)."""
+def detect_automatic(full_screenshot: Image.Image, cursor_local: tuple[int, int] | None = None) -> CaptureRegion:
+    """Locate a likely tooltip text block.
+
+    We merge nearby high-contrast glyphs into text-block contours instead of
+    treating each letter as a contour. Cursor proximity is a bonus because D2R
+    tooltips are shown next to the item being hovered.
+    """
     try:
         import cv2
     except ImportError:
-        return _fallback_region(full_screenshot)
+        return _fallback_region(full_screenshot, cursor_local)
 
-    arr = np.array(full_screenshot.convert("L"))
-    h, w = arr.shape
+    rgb = np.array(full_screenshot.convert("RGB"))
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    h, w = gray.shape
+    if w < 200 or h < 150:
+        return CaptureRegion(0, 0, w, h)
 
-    # Simple contrast map via local standard deviation.
-    blur = cv2.GaussianBlur(arr, (9, 9), 0)
-    diff = cv2.absdiff(arr, blur)
-    _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+    # D2R tooltip text is high-contrast against a very dark translucent panel.
+    local = cv2.GaussianBlur(gray, (7, 7), 0)
+    contrast = cv2.absdiff(gray, local)
+    _, ink = cv2.threshold(contrast, 18, 255, cv2.THRESH_BINARY)
+    # Merge letters -> words -> lines -> one tooltip-sized text block.
+    ink = cv2.morphologyEx(ink, cv2.MORPH_CLOSE, np.ones((5, 17), np.uint8), iterations=1)
+    ink = cv2.dilate(ink, np.ones((9, 19), np.uint8), iterations=2)
 
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(ink, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     best = None
-    best_area = 0
+    best_score = float("-inf")
     for c in contours:
         x, y, cw, ch = cv2.boundingRect(c)
+        if cw < 120 or ch < 35 or cw > w * 0.88 or ch > h * 0.90:
+            continue
         area = cw * ch
-        # Tooltips are wider than tall, reasonably sized, not the whole screen.
-        if area > best_area and 100 < cw < w * 0.6 and 60 < ch < h * 0.6 and cw > ch:
-            best = (x, y, cw, ch)
-            best_area = area
+        roi = gray[y:y+ch, x:x+cw]
+        if roi.size == 0:
+            continue
+        # Prefer text-dense, darker regions and sensible tooltip geometry.
+        darkness = max(0.0, 150.0 - float(np.mean(roi)))
+        aspect_bonus = 30.0 if 0.55 <= (cw / max(ch, 1)) <= 7.0 else 0.0
+        score = (area ** 0.5) + darkness * 1.7 + aspect_bonus
+        if cursor_local:
+            cx, cy = cursor_local
+            bx, by = x + cw / 2, y + ch / 2
+            dist = ((bx - cx) ** 2 + (by - cy) ** 2) ** 0.5
+            score += max(0.0, 260.0 - dist * 0.20)
+        if score > best_score:
+            best, best_score = (x, y, cw, ch), score
 
     if best is None:
-        return _fallback_region(full_screenshot)
+        return _fallback_region(full_screenshot, cursor_local)
 
     x, y, cw, ch = best
-    pad = 8
-    return CaptureRegion(
-        x=max(0, x - pad), y=max(0, y - pad),
-        width=min(w - x, cw + pad * 2), height=min(h - y, ch + pad * 2),
-    )
+    pad_x, pad_y = 28, 24
+    left, top = max(0, x-pad_x), max(0, y-pad_y)
+    right, bottom = min(w, x+cw+pad_x), min(h, y+ch+pad_y)
+    return CaptureRegion(left, top, right-left, bottom-top)
 
 
-def _fallback_region(full_screenshot: Image.Image) -> CaptureRegion:
+def _fallback_region(full_screenshot: Image.Image, cursor_local: tuple[int, int] | None = None) -> CaptureRegion:
     w, h = full_screenshot.size
-    return CaptureRegion(x=w // 4, y=h // 4, width=w // 2, height=h // 2)
+    if cursor_local:
+        cx, cy = cursor_local
+        # Generous cursor-centered area, clipped to the D2R client. This is much
+        # safer in windowed mode than using a desktop-centered rectangle.
+        rw, rh = min(900, w), min(700, h)
+        x = max(0, min(w-rw, cx-rw//2))
+        y = max(0, min(h-rh, cy-rh//2))
+        return CaptureRegion(x, y, rw, rh)
+    return CaptureRegion(x=w//6, y=h//6, width=max(1, w*2//3), height=max(1, h*2//3))
 
 
-def detect_tooltip_region(mode: str, full_screenshot: Image.Image | None, settings: dict) -> CaptureRegion:
-    if mode == "Fixed Region" or mode == "Manual Selection":
+def detect_tooltip_region(mode: str, full_screenshot: Image.Image | None, settings: dict,
+                          cursor_local: tuple[int, int] | None = None) -> CaptureRegion:
+    if mode in ("Fixed Region", "Manual Selection"):
         return detect_fixed_region(settings.get("fixed_region", {}))
     if mode == "Automatic" and full_screenshot is not None:
-        return detect_automatic(full_screenshot)
+        return detect_automatic(full_screenshot, cursor_local=cursor_local)
     return detect_fixed_region(settings.get("fixed_region", {}))

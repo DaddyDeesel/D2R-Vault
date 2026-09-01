@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 APP_NAME = "D2R Vault"
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.2"
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # PyInstaller one-file apps are extracted into a temporary _MEIPASS folder.
@@ -54,7 +54,7 @@ TOOLTIP_CAPTURE_MODES = ["Automatic", "Fixed Region", "Manual Selection"]
 @dataclass
 class Settings:
     hotkeys: dict = field(default_factory=lambda: dict(DEFAULT_HOTKEYS))
-    tooltip_capture_mode: str = "Fixed Region"
+    tooltip_capture_mode: str = "Automatic"
     fixed_region: dict = field(default_factory=lambda: {"x": 0, "y": 0, "width": 400, "height": 300})
     save_screenshots: bool = True
     ocr_engine: str = "tesseract"

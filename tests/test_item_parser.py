@@ -68,3 +68,20 @@ def test_skills_list_populated():
     ocr = "Nightwing's Veil\nSpired Helm\n+2 To Necromancer Skill Levels\n+2 To Curses"
     parsed = parse_item(ocr)
     assert any(s.skill.lower() == "curses" for s in parsed.skills)
+
+
+def test_ui_stash_tab_gems_is_rejected_as_item_capture():
+    from app.parser.item_parser import validate_item_capture
+    parsed = parse_item("Gems", ocr_confidence=98.0)
+    valid, reason, score = validate_item_capture(parsed, "Gems")
+    assert not valid
+    assert "label" in reason.lower() or "tooltip" in reason.lower()
+
+
+def test_real_gem_tooltip_is_not_confused_with_gems_tab():
+    from app.parser.item_parser import validate_item_capture
+    text = """Perfect Topaz\nCan be Inserted into Socketed Items\nWeapons: Adds 1-40 Lightning Damage\nArmor: 24% Better Chance of Getting Magic Items\nShields: Lightning Resist +40%"""
+    parsed = parse_item(text, ocr_confidence=92.0)
+    valid, reason, score = validate_item_capture(parsed, text)
+    assert valid, reason
+    assert score >= 2

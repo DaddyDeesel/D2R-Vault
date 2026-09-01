@@ -219,6 +219,79 @@ def _parse_item_inner(raw_ocr_text: str, ocr_confidence: float | None) -> Parsed
     return result
 
 
+
+_UI_LABELS = {
+    "gems", "runes", "keys", "misc", "personal", "shared", "shared stash",
+    "personal stash", "stash", "inventory", "cube", "horadric cube",
+    "mercenary", "character", "skill tree", "skills", "quests", "waypoint",
+    "repair", "trade", "buy", "sell", "gold", "deposit", "withdraw",
+    "close", "cancel", "accept", "gamble", "socket", "transmute",
+}
+
+_ITEM_SIGNAL_PATTERNS = [
+    re.compile(r"\bdefense\s*[:]?\s*\d+", re.I),
+    re.compile(r"\b(?:one|two)?-?hand(?:ed)?\s+damage\b|\bdamage\s*[:]?\s*\d+", re.I),
+    re.compile(r"\brequired\s+(?:level|strength|dexterity)\b", re.I),
+    re.compile(r"\bdurability\b", re.I),
+    re.compile(r"\bsocketed\s*\(\d+\)", re.I),
+    re.compile(r"\bethereal\b", re.I),
+    re.compile(r"[+-]\s*\d+\s*%?\s+(?:to|faster|enhanced|chance|all|life|mana|fire|cold|lightning|poison)", re.I),
+    re.compile(r"\b(?:fire|cold|lightning|poison)\s+resist", re.I),
+    re.compile(r"\b(?:weapon|armor|shield)\s*[:]?", re.I),
+    re.compile(r"\bcan be inserted into socketed items\b", re.I),
+]
+
+
+def validate_item_capture(parsed: ParsedItem, raw_ocr_text: str) -> tuple[bool, str, int]:
+    """Reject obvious D2R UI chrome while staying permissive for real items.
+
+    Returns (is_valid, reason, evidence_score). This deliberately does not
+    require a known reference-db match because the bundled DB is only a seed.
+    """
+    normalized = normalize_ocr_text(raw_ocr_text)
+    lines = [ln.strip() for ln in normalized.splitlines() if ln.strip()]
+    if not lines:
+        return False, "No tooltip text was detected", 0
+
+    first = re.sub(r"[^a-z0-9' ]+", "", lines[0].lower()).strip()
+    if first in _UI_LABELS and len(lines) <= 2:
+        return False, f"'{lines[0]}' looks like a stash/UI label, not an item tooltip", 0
+
+    # A single unknown word/short phrase is almost always UI chrome. Known
+    # item names are allowed so simple rune/base captures still work.
+    ref = item_database.find_entry(parsed.name)
+    if len(lines) == 1 and ref is None:
+        return False, "Only a UI-style label was detected; hover the item until its tooltip is visible", 0
+
+    score = 0
+    if ref is not None:
+        score += 3
+    if parsed.defense is not None or parsed.damage_min is not None:
+        score += 3
+    if parsed.required_level is not None or parsed.required_strength is not None or parsed.required_dexterity is not None:
+        score += 2
+    if parsed.socket_count or parsed.ethereal or parsed.durability is not None:
+        score += 2
+    if parsed.skills or parsed.plus_to_skills is not None or parsed.resistances or parsed.all_resistances is not None:
+        score += 2
+    if any(v is not None for v in (parsed.enhanced_damage, parsed.enhanced_defense, parsed.faster_cast_rate,
+                                    parsed.faster_hit_recovery, parsed.faster_run_walk, parsed.magic_find,
+                                    parsed.gold_find, parsed.life_leech, parsed.mana_leech)):
+        score += 2
+    joined = "\n".join(lines)
+    score += min(3, sum(1 for pat in _ITEM_SIGNAL_PATTERNS if pat.search(joined)))
+    if len(lines) >= 3:
+        score += 1
+    if len(lines) >= 5:
+        score += 1
+
+    # Multi-line tooltips are allowed even when OCR misses structured stats, but
+    # two-line/no-signal captures are too likely to be menus/tabs.
+    if score < 2 and len(lines) <= 2:
+        return False, "The capture does not contain enough item-tooltip evidence", score
+    return True, "", score
+
+
 def compute_fingerprint(parsed: ParsedItem) -> str:
     """A stable hash used for duplicate detection (spec §15). Built from
     the fields most likely to distinguish genuinely different items,
