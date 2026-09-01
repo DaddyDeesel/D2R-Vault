@@ -125,7 +125,10 @@ class MainWindow(QMainWindow):
         if d.exec():
             values = d.values()
             if not values["name"]: QMessageBox.warning(self, "Missing Name", "Please enter a character name."); return
-            CharacterService(self.session).create_character(**values); self.refresh_vault()
+            char = CharacterService(self.session).create_character(**values)
+            self.refresh_vault()
+            # A newly-created character should immediately become the active scan target.
+            self.open_character(char.id)
 
     def open_character(self, character_id):
         self.current_character_id = character_id; char = CharacterService(self.session).characters.get(character_id)
@@ -141,10 +144,21 @@ class MainWindow(QMainWindow):
         ocr = TesseractOCREngine(language=self.settings.ocr_language, tesseract_cmd=self.settings.tesseract_cmd)
         return CaptureService(MSSScreenCapture(), ocr, self.settings)
 
+    def _ensure_active_character(self) -> bool:
+        """Resolve the active scan target from the Vault selection when possible."""
+        if self.current_character_id is not None:
+            return True
+        selected = self.vault_view.list_widget.currentItem()
+        if selected is not None:
+            character_id = selected.data(1000)
+            if character_id is not None:
+                self.open_character(character_id)
+        return self.current_character_id is not None
+
     def perform_capture(self):
         if self.hotkeys.is_paused: return
-        if self.current_character_id is None:
-            self.overlay.show_failure("Open a character before scanning")
+        if not self._ensure_active_character():
+            self.overlay.show_failure("Select a character in the Vault before scanning")
             return
         if self.rapid_scan_enabled:
             now = time.monotonic()
@@ -189,7 +203,9 @@ class MainWindow(QMainWindow):
         self._refresh_inventory(); self.refresh_vault()
 
     def open_manual_entry(self):
-        if self.current_character_id is None: QMessageBox.information(self, "Select a Character", "Open a character before adding items."); return
+        if not self._ensure_active_character():
+            QMessageBox.information(self, "Select a Character", "Select a character in the Vault before adding items.")
+            return
         d = ManualItemEntryDialog(self)
         if d.exec():
             from app.parser.item_parser import parse_item

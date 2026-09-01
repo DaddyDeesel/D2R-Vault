@@ -106,6 +106,10 @@ class CharacterVaultView(QWidget):
 
         self.list_widget = QListWidget()
         self.list_widget.setObjectName("Panel")
+        # Treat a normal single click as selecting/opening the character.
+        # itemActivated alone requires double-click/Enter on many platforms, which
+        # made the UI look selected while MainWindow still had no active character.
+        self.list_widget.itemClicked.connect(self._on_item_activated)
         self.list_widget.itemActivated.connect(self._on_item_activated)
         layout.addWidget(self.list_widget)
 
