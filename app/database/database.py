@@ -28,7 +28,7 @@ def backup_database(db_path: Path = config.DB_PATH, backup_dir: Path = config.BA
     if not db_path.exists():
         return None
     backup_dir.mkdir(parents=True, exist_ok=True)
-    stamp = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
+    stamp = dt.datetime.now().strftime("%Y-%m-%d_%H%M%S_%f")
     dest = backup_dir / f"d2r_vault_{stamp}.db"
     shutil.copy2(db_path, dest)
     _prune_backups(backup_dir)
@@ -91,3 +91,18 @@ def get_session_factory():
     if _SessionLocal is None:
         _SessionLocal = init_db()
     return _SessionLocal
+
+
+def reset_session_factory():
+    """Dispose pooled SQLite connections and clear the cached session factory.
+
+    The next call to get_session_factory() recreates the engine/factory. Keeping
+    disposal and recreation separate is important when replacing the DB file on
+    Windows, where an open SQLite handle can lock or retain the old file.
+    """
+    global _SessionLocal
+    if _SessionLocal is not None:
+        bind = _SessionLocal.kw.get("bind")
+        if bind is not None:
+            bind.dispose()
+    _SessionLocal = None

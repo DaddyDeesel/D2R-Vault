@@ -29,7 +29,7 @@ class Base(DeclarativeBase):
 
 
 def _now() -> dt.datetime:
-    return dt.datetime.utcnow()
+    return dt.datetime.now(dt.UTC).replace(tzinfo=None)
 
 
 class Character(Base):

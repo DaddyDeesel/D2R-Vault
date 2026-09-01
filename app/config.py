@@ -1,33 +1,34 @@
-"""
-D2R Vault — application configuration.
-
-Centralizes paths, defaults and constants so every other module reads
-from one place instead of hard-coding values. Nothing here talks to
-Diablo II: Resurrected itself — this only configures how *this*
-application behaves.
-"""
+"""D2R Vault application configuration."""
 from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-# --------------------------------------------------------------------------
-# Base paths
-# --------------------------------------------------------------------------
-
 APP_NAME = "D2R Vault"
-APP_VERSION = "0.1.0"
-
-# Root of the installed/checked-out application (…/d2r_vault)
+APP_VERSION = "0.2.0"
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DATA_DIR = BASE_DIR / "data"
+# PyInstaller one-file apps are extracted into a temporary _MEIPASS folder.
+# Never put mutable user data there: it may disappear on exit. Assets are read
+# from the bundle, while DB/settings/captures live in a persistent user folder.
+if getattr(sys, "frozen", False):
+    RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    if os.name == "nt":
+        USER_DATA_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "D2R Vault"
+    else:
+        USER_DATA_ROOT = Path.home() / ".local" / "share" / "d2r-vault"
+else:
+    RESOURCE_DIR = BASE_DIR
+    USER_DATA_ROOT = BASE_DIR
+
+DATA_DIR = USER_DATA_ROOT / "data"
 BACKUP_DIR = DATA_DIR / "backups"
 CAPTURES_DIR = DATA_DIR / "captures"
-LOG_DIR = BASE_DIR / "logs"
-ASSETS_DIR = BASE_DIR / "assets"
+LOG_DIR = USER_DATA_ROOT / "logs"
+ASSETS_DIR = RESOURCE_DIR / "assets"
 DB_PATH = DATA_DIR / "d2r_vault.db"
 SETTINGS_PATH = DATA_DIR / "settings.json"
 LOG_PATH = LOG_DIR / "d2r_vault.log"
@@ -35,96 +36,30 @@ LOG_PATH = LOG_DIR / "d2r_vault.log"
 for d in (DATA_DIR, BACKUP_DIR, CAPTURES_DIR, LOG_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
-# --------------------------------------------------------------------------
-# Domain constants
-# --------------------------------------------------------------------------
-
-CHARACTER_CLASSES = [
-    "Amazon",
-    "Assassin",
-    "Barbarian",
-    "Druid",
-    "Necromancer",
-    "Paladin",
-    "Sorceress",
-]
-
+CHARACTER_CLASSES = ["Amazon", "Assassin", "Barbarian", "Druid", "Necromancer", "Paladin", "Sorceress"]
 DIFFICULTIES = ["Normal", "Nightmare", "Hell"]
-
 ITEM_QUALITIES = [
-    "Normal",
-    "Superior",
-    "Magic",
-    "Rare",
-    "Set",
-    "Unique",
-    "Crafted",
-    "Rune",
-    "Gem",
-    "Charm",
-    "Jewel",
-    "Runeword",
-    "Quest",
-    "Miscellaneous",
+    "Normal", "Superior", "Magic", "Rare", "Set", "Unique", "Crafted",
+    "Rune", "Gem", "Charm", "Jewel", "Runeword", "Quest", "Miscellaneous",
 ]
-
-CONTAINERS = [
-    "Equipped",
-    "Inventory",
-    "Personal Stash",
-    "Shared Stash",
-    "Cube",
-    "Mercenary",
-]
-
-EQUIPMENT_SLOTS = [
-    "Helm",
-    "Amulet",
-    "Weapon",
-    "Shield",
-    "Armor",
-    "Gloves",
-    "Belt",
-    "Boots",
-    "Ring1",
-    "Ring2",
-]
-
-# Default grid sizes (columns x rows), matching D2R conventions.
+CONTAINERS = ["Equipped", "Inventory", "Personal Stash", "Shared Stash", "Cube", "Mercenary"]
+EQUIPMENT_SLOTS = ["Helm", "Amulet", "Weapon", "Shield", "Armor", "Gloves", "Belt", "Boots", "Ring1", "Ring2"]
 GRID_SIZES = {
-    "Inventory": (10, 4),
-    "Personal Stash": (10, 10),
-    "Shared Stash": (10, 10),
-    "Cube": (3, 4),
-    "Mercenary": (2, 3),  # loose logical grid for mercenary gear display
+    "Equipped": (4, 4), "Inventory": (10, 4), "Personal Stash": (10, 10),
+    "Shared Stash": (10, 10), "Cube": (3, 4), "Mercenary": (2, 3),
 }
-
-DEFAULT_HOTKEYS = {
-    "capture": "F9",
-    "rapid_scan": "F10",
-    "open_vault": "F11",
-    "pause": "F12",
-}
-
+DEFAULT_HOTKEYS = {"capture": "F9", "rapid_scan": "F10", "open_vault": "F11", "pause": "F12"}
 TOOLTIP_CAPTURE_MODES = ["Automatic", "Fixed Region", "Manual Selection"]
-
-
-# --------------------------------------------------------------------------
-# Persisted user settings
-# --------------------------------------------------------------------------
 
 @dataclass
 class Settings:
-    """User-editable application settings, persisted as JSON."""
-
     hotkeys: dict = field(default_factory=lambda: dict(DEFAULT_HOTKEYS))
     tooltip_capture_mode: str = "Fixed Region"
-    fixed_region: dict = field(
-        default_factory=lambda: {"x": 0, "y": 0, "width": 400, "height": 300}
-    )
+    fixed_region: dict = field(default_factory=lambda: {"x": 0, "y": 0, "width": 400, "height": 300})
     save_screenshots: bool = True
     ocr_engine: str = "tesseract"
     ocr_language: str = "eng"
+    tesseract_cmd: str = ""
     ocr_confidence_threshold: float = 60.0
     rapid_scan_delay_seconds: float = 0.5
     automatic_backups: bool = True
@@ -141,13 +76,12 @@ class Settings:
                 base.update(data)
                 return cls(**base)
             except (json.JSONDecodeError, TypeError, OSError):
-                # Corrupt or unreadable settings should never crash startup.
                 return cls()
         return cls()
 
     def save(self, path: Path = SETTINGS_PATH) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(asdict(self), indent=2), encoding="utf-8")
-
 
 def get_settings() -> Settings:
     return Settings.load()

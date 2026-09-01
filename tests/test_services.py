@@ -55,7 +55,9 @@ def test_inventory_placement_and_collision(session):
     r1 = item_svc.save_parsed_item(parsed1, char.id, container="Inventory", x=0, y=0)
     item1 = r1.item
 
-    assert inv_svc.can_place(char.id, "Inventory", 0, 0, 1, 1, exclude_item_id=item1.id) is False
+    assert inv_svc.can_place(char.id, "Inventory", 0, 0, 1, 1) is False
+    # When moving item1, its own occupied cells must be excluded from collision checks.
+    assert inv_svc.can_place(char.id, "Inventory", 0, 0, 1, 1, exclude_item_id=item1.id) is True
     assert inv_svc.can_place(char.id, "Inventory", 1, 0, 1, 1) is True
 
     r2 = item_svc.save_parsed_item(parsed2, char.id, container="Inventory", x=1, y=0)

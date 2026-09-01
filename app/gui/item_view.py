@@ -204,3 +204,65 @@ class ManualItemEntryDialog(QDialog):
             lines.append("Ethereal (Cannot Be Repaired)")
         lines.extend(self.stats_text.toPlainText().splitlines())
         return "\n".join(l for l in lines if l.strip())
+
+class ItemDetailsDialog(QDialog):
+    """Inspect/edit a stored item after clicking it in the inventory grid."""
+    def __init__(self, item, parent=None):
+        super().__init__(parent)
+        self.item = item
+        self.delete_requested = False
+        self.setWindowTitle(item.name)
+        self.setMinimumWidth(500)
+        layout = QVBoxLayout(self)
+
+        header = QLabel(item.name)
+        header.setStyleSheet(f"font-size:20px;font-weight:700;color:{quality_color(item.quality)};")
+        layout.addWidget(header)
+        form = QFormLayout()
+        self.name_edit = QLineEdit(item.name); form.addRow("Name:", self.name_edit)
+        self.quality_combo = QComboBox(); self.quality_combo.addItems(ITEM_QUALITIES); self.quality_combo.setCurrentText(item.quality); form.addRow("Quality:", self.quality_combo)
+        self.base_edit = QLineEdit(item.base_name or ""); form.addRow("Base:", self.base_edit)
+        self.favorite = QCheckBox("Favorite"); self.favorite.setChecked(bool(item.is_favorite)); form.addRow("", self.favorite)
+        self.tags_edit = QLineEdit(", ".join(item.tags or [])); self.tags_edit.setPlaceholderText("keep, trade, grail"); form.addRow("Tags:", self.tags_edit)
+        self.notes_edit = QPlainTextEdit(item.notes or ""); self.notes_edit.setMaximumHeight(90); form.addRow("Notes:", self.notes_edit)
+        layout.addLayout(form)
+
+        stat_lines = []
+        for label, value in [
+            ("Defense", item.defense), ("Damage", f"{item.damage_min}-{item.damage_max}" if item.damage_min is not None else None),
+            ("Required level", item.required_level), ("Sockets", item.socket_count or None),
+            ("FCR", f"{item.faster_cast_rate}%" if item.faster_cast_rate else None),
+            ("FHR", f"{item.faster_hit_recovery}%" if item.faster_hit_recovery else None),
+            ("Magic Find", f"{item.magic_find}%" if item.magic_find else None),
+        ]:
+            if value is not None: stat_lines.append(f"{label}: {value}")
+        if item.ethereal: stat_lines.append("Ethereal")
+        for k,v in (item.resistances or {}).items(): stat_lines.append(f"{k.title()} Resist: {v:+d}%")
+        for skill in (item.skills or []): stat_lines.append(f"+{skill.get('amount')} {skill.get('skill')}")
+        if item.screenshot_path: stat_lines.append(f"Screenshot: {item.screenshot_path}")
+        stats = QPlainTextEdit("\n".join(stat_lines) or "No structured stats parsed."); stats.setReadOnly(True); stats.setMaximumHeight(150)
+        layout.addWidget(stats)
+
+        if item.raw_ocr_text:
+            raw = QPlainTextEdit(item.raw_ocr_text); raw.setReadOnly(True); raw.setMaximumHeight(120)
+            layout.addWidget(QLabel(f"Raw OCR ({item.ocr_confidence or 0:.0f}%):")); layout.addWidget(raw)
+
+        row = QHBoxLayout()
+        delete_btn = QPushButton("DELETE ITEM"); delete_btn.clicked.connect(self._delete)
+        cancel = QPushButton("Cancel"); cancel.clicked.connect(self.reject)
+        save = QPushButton("SAVE CHANGES"); save.setObjectName("Primary"); save.clicked.connect(self.accept)
+        row.addWidget(delete_btn); row.addStretch(); row.addWidget(cancel); row.addWidget(save); layout.addLayout(row)
+
+    def _delete(self):
+        self.delete_requested = True
+        self.accept()
+
+    def values(self):
+        return {
+            "name": self.name_edit.text().strip() or self.item.name,
+            "quality": self.quality_combo.currentText(),
+            "base_name": self.base_edit.text().strip() or None,
+            "is_favorite": self.favorite.isChecked(),
+            "tags": [x.strip() for x in self.tags_edit.text().split(",") if x.strip()],
+            "notes": self.notes_edit.toPlainText().strip() or None,
+        }

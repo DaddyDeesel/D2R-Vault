@@ -130,3 +130,34 @@ database code.
 
 All data is local. No cloud account, no telemetry, no Battle.net interaction,
 no network connection required to run the core application.
+
+---
+
+## v0.2 quick start on Windows
+
+The easiest source-code launch is now:
+
+```bat
+setup_and_run_windows.bat
+```
+
+It creates `.venv`, installs `requirements.txt`, and launches the app. You still
+need the **Tesseract OCR engine** installed separately. If Tesseract is not on
+PATH, open **Settings → OCR → Browse** and select `tesseract.exe` (commonly
+`C:\Program Files\Tesseract-OCR\tesseract.exe`).
+
+For a packaged build, run:
+
+```bat
+build_windows.bat
+```
+
+The one-file build stores your mutable data outside the temporary PyInstaller
+bundle under:
+
+```text
+%LOCALAPPDATA%\D2R Vault\data
+```
+
+That folder contains the SQLite database, settings, backups, and saved capture
+screenshots. See `CHANGELOG-v0.2.md` for the fixes added in this release.
