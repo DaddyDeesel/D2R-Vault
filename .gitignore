@@ -10,3 +10,7 @@ data/backups/*.db
 data/captures/
 logs/*.log
 .pytest_cache/
+
+# D2R Treasure Vault local runtime
+**/.runtime/
+**/user-data/

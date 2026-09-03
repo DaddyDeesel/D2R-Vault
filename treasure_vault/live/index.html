@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#15110e">
+  <title>D2R Treasure Vault · Diablo II Stash</title>
+  <link rel="stylesheet" href="/theme.css">
+  <script src="/logic.js" defer></script>
+  <script src="/features.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="vault">
+    <header class="masthead">
+      <div><p class="eyebrow">DIABLO II · REIGN OF THE WARLOCK</p><h1>D2R Treasure Vault</h1><p class="realm">Softcore Ladder <span>·</span> PC <span>·</span> Americas</p></div>
+      <div class="connection"><div class="connection-summary"><div class="connection-readings"><span id="connection-state" class="connection-state">Connecting to stash</span><span id="last-checked">Waiting for the first scan</span></div><button id="open-log" class="button log-button" type="button" aria-expanded="false" aria-controls="changes-panel">Inventory Log</button></div><div class="connection-actions"><button id="refresh" class="button quiet" type="button">↻ Refresh stash</button><button id="settings" class="button" type="button">Settings</button></div></div>
+    </header>
+        <section id="changes-panel" class="detail-panel changes-panel log-panel" aria-labelledby="log-title" hidden>
+          <div class="panel-heading"><div><p class="eyebrow">ACTIVITY IN YOUR VAULT</p><h3 id="log-title">Inventory Log</h3></div><button id="close-log" class="button quiet" type="button">Close log</button></div><p id="changes-summary" class="composer-hint">Waiting for inventory</p>
+          <p id="changes-scope" class="composer-hint">Stashes only · Shared stashes, materials tabs and all personal stash tabs. Carried inventory is excluded. Change this in Settings.</p><p class="composer-hint">Added and removed counts include stack quantities. Removed means missing from the tracked locations in the latest capture; it does not confirm a sale.</p>
+          <div id="changes-totals" class="changes-totals" aria-label="Saved log totals"></div>
+          <div class="changes-toolbar"><div id="changes-filters" class="changes-filters" role="group" aria-label="Filter inventory log"><button type="button" data-change-filter="all" aria-pressed="true">All activity</button><button type="button" data-change-filter="added" aria-pressed="false">+ Added</button><button type="button" data-change-filter="removed" aria-pressed="false">− Removed</button><button type="button" data-change-filter="changed" aria-pressed="false">Moves &amp; details</button></div><button id="clear-changes" class="button quiet" type="button">Clear history</button></div>
+          <div id="changes-list"></div><p id="changes-status" class="composer-hint" role="status"></p>
+        </section>
+    <section id="settings-panel" class="detail-panel settings-panel" aria-label="Vault settings" hidden>
+      <div class="panel-heading"><div><p class="eyebrow">MAKE THE VAULT YOURS</p><h3>Vault settings</h3></div><button id="close-settings" class="button quiet" type="button">Close</button></div>
+      <p class="composer-hint">Choose your D2R Manager items.db. The vault reads it in place and follows updates. Keep its WAL and SHM companion files beside it. Prices, mule choices and drafts are saved separately for each database.</p>
+      <form id="settings-form"><label for="database-path">Inventory database</label><div class="database-controls"><input id="database-path" type="text" required placeholder="C:\path\to\items.db" autocomplete="off"><button id="browse-database" class="button" type="button">Browse…</button><button id="save-settings" class="button primary" type="submit">Save database</button></div></form>
+      <p id="settings-status" class="composer-hint" role="status"></p>
+        <details class="mule-picker">
+          <summary>Select Mules <span id="mule-summary">Shared stash only</span></summary>
+          <p class="composer-hint">Account shared stashes are always included. Choose characters below to include both their personal stash tabs and carried inventory. Unchecking a character removes both from the sale scope. Equipped and mercenary items are excluded.</p>
+          <div class="mule-actions"><button id="all-mules" class="button" type="button">All characters</button><button id="clear-mules" class="button quiet" type="button">Shared stash only</button></div>
+          <div id="mule-list" class="mule-list"></div>
+        </details>
+
+      <section class="log-settings" aria-labelledby="log-settings-title">
+        <h4 id="log-settings-title">Inventory Log</h4>
+        <label class="log-inventory-option"><input id="log-include-inventory" type="checkbox" aria-describedby="log-scope-help" disabled><span>Include carried inventory in the log</span></label>
+        <p id="log-scope-help" class="composer-hint">Off by default: track items in account shared stashes, materials tabs, and every character’s personal stash. Items picked up or dropped in a character’s backpack are ignored. Moving an item from a stash into a backpack appears as Removed from the stash; putting it back appears as Added.</p>
+        <p class="composer-hint">Turn this on to also track carried inventory, including pickups, drops and moves between a stash and a backpack. Equipped items and mercenary gear are always excluded. This setting only affects the log; Select Mules controls what you can list for sale.</p>
+        <p class="composer-hint">Saved automatically for this database. Each mode keeps a separate history. Switching modes starts a fresh comparison so changing this option does not create additions or removals.</p>
+        <fieldset class="log-collections"><legend>Collections to log</legend><p id="log-collections-help" class="composer-hint">Check the collections you want to track. Unchecked collections stop creating log entries and their saved entries are hidden. Checking them again restores saved entries and tracks future changes. Your sale inventory is unaffected.</p><div class="mule-actions"><button id="log-all-collections" class="button" type="button" disabled>All collections</button><button id="log-no-collections" class="button quiet" type="button" disabled>None</button></div><div id="log-collection-list" class="log-collection-list" aria-describedby="log-collections-help"></div></fieldset>
+        <p id="log-settings-status" class="composer-hint" role="status"></p>
+      </section>
+
+    </section>
+    <div class="workspace">
+      <aside class="collections"><h2>Collections</h2><nav id="collections" aria-label="Item collections"></nav><div class="aside-note"><span class="tiny-heading">YOUR VAULT, IN SYNC</span><p>Account shared tabs, plus personal stash tabs and inventories from your selected mules. Equipped items, mercenary gear and drop history stay out.</p><p id="source-time"></p></div></aside>
+      <section class="inventory" aria-label="Stash inventory">
+        <div class="inventory-heading"><div><p class="eyebrow">THE ARMORY</p><h2 id="collection-title">All treasures</h2></div><span id="result-count" class="result-count" aria-live="polite">Reading your stash…</span></div>
+        <details class="count-breakdown"><summary>How this total is counted</summary><p class="composer-hint">Listings are the rows available for sale. Total quantity counts every unit inside stacks: 120 El runes are one listing and 120 units. This breakdown follows your mule choices and search filters.</p><dl id="quantity-breakdown"></dl></details>
+
+
+        <div class="filters">
+          <label class="search-label">Search the vault<input id="search" type="search" placeholder="Item, roll, base or character…" autocomplete="off"></label>
+          <label>Character<select id="character"><option value="">All characters</option></select></label>
+          <label class="mobile-collection">Collection<select id="category"><option value="">All treasures</option></select></label>
+        </div>
+        <div class="refinement-bar" aria-label="Narrow inventory results"><span id="refinement-heading">Narrow all treasures</span><label>Item type<select id="item-type"><option value="">All item types</option></select></label><label>Quality<select id="item-quality"><option value="">All qualities</option></select></label><button id="clear-refinements" class="button quiet" type="button" disabled>Reset subtypes</button></div>
+        <div class="selection-bar"><div class="selection-actions"><button id="select-matching" class="button" type="button" disabled>Select matching</button><button id="clear-selection" class="button quiet" type="button" disabled>Clear</button><label class="selected-toggle"><input id="selected-only" type="checkbox"> Selected only</label></div><div class="export-action"><span id="selection-count">0 selected</span><button id="set-prices" class="button" type="button" disabled>Set prices</button><button id="export" class="button primary" type="button" disabled>Create d2jsp post <span aria-hidden="true">↗</span></button></div></div>
+        <p id="price-summary" class="composer-hint" aria-live="polite">Select listings to price your sale.</p>
+        <section id="pricing-panel" class="detail-panel" aria-label="Price selected listings" hidden>
+          <div class="panel-heading"><div><p class="eyebrow">ASKING PRICES · FORUM GOLD</p><h3>Price selected listings</h3></div><button id="close-pricing" class="button quiet" type="button">Close</button></div>
+          <p class="composer-hint">Apply the same asking price to each selected listing. “Whole listing” covers its entire displayed quantity. Prices are saved in this browser.</p>
+          <div id="bulk-price-editor"></div>
+        </section>
+        <p id="notice" class="notice" role="status" hidden></p>
+        <section id="export-panel" class="detail-panel" aria-label="Selected d2jsp post" hidden>
+          <div class="panel-heading"><div><p class="eyebrow">READY FOR THE TRADE BOARD</p><h3>Your selected treasures</h3></div><button id="close-export" class="button quiet" type="button">Close</button></div>
+          <div class="composer-toolbar" role="toolbar" aria-label="Post formatting">
+            <button id="format-bold" class="button" type="button" aria-label="Bold selected text"><b>B</b></button>
+            <button id="format-italic" class="button" type="button" aria-label="Italicize selected text"><i>I</i></button>
+            <button id="format-underline" class="button" type="button" aria-label="Underline selected text"><u>U</u></button>
+            <label class="composer-color">Color<select id="format-color"><option value="gold">Gold</option><option value="green">Green</option><option value="blue">Blue</option><option value="red">Red</option><option value="purple">Purple</option><option value="orange">Orange</option><option value="teal">Teal</option><option value="white">White</option><option value="gray">Gray</option></select></label>
+            <button id="apply-color" class="button" type="button">Apply color</button>
+            <button id="rebuild-post" class="button quiet" type="button">Rebuild from selection</button>
+            <button id="restore-draft" class="button quiet" type="button" hidden>Undo rebuild</button>
+          </div>
+          <p id="composer-help" class="composer-hint">Highlight text in the editor, then apply formatting. Your edits are saved in this browser.</p>
+          <div id="draft-warning" class="notice" hidden><span id="draft-warning-text"></span> <button id="accept-draft" class="button" type="button">Keep reviewed draft</button></div>
+          <div class="composer-grid">
+            <div><label for="post-text" class="composer-label">EDIT POST · BBCODE</label><textarea id="post-text" rows="15" spellcheck="false"></textarea></div>
+            <div><h4 class="composer-label">FORMATTED PREVIEW</h4><div id="post-preview" class="post-preview" role="region" aria-label="Formatted post preview"></div><p class="composer-hint">Approximate preview; d2jsp may use different fonts and spacing.</p></div>
+          </div>
+          <div class="panel-footer"><span id="export-status" role="status"></span><div><button id="copy-post" class="button" type="button">Copy post</button><a id="download-post" class="button primary" download="d2jsp-selected-treasures.txt">Download .txt</a></div></div>
+        </section>
+        <section id="item-detail" class="detail-panel" aria-label="Item locations" hidden></section>
+        <div class="table-wrap"><table><thead><tr><th scope="col">Treasure / owner</th><th scope="col">Important rolls</th><th scope="col" class="quantity">Qty</th><th scope="col" class="price-column">Asking price</th></tr></thead><tbody id="items"><tr><td colspan="4" class="empty">Opening the vault…</td></tr></tbody></table></div>
+        <footer class="pagination"><span id="page-status"></span><div><button id="previous" class="button quiet" type="button" disabled>← Previous</button><button id="next" class="button quiet" type="button" disabled>Next →</button></div></footer>
+      </section>
+    </div>
+    <footer class="vault-footer"><span id="sync-description">Checks the stash every 5 seconds while this tool is running.</span><span>D2R Treasure Vault v0.2 · Your asking prices in FG</span></footer>
+  </main>
+</body>
+</html>

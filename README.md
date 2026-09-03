@@ -1,163 +1,124 @@
-# D2R Vault
+# D2R Treasure Vault
 
-A companion inventory-management tool for **Diablo II: Resurrected**. Hover over
-an item in-game, press **F9**, and D2R Vault captures the tooltip, reads it with
-OCR, parses it into structured stats, and — after you confirm — saves it into a
-searchable local database of your characters' gear.
+**A searchable, visual sales vault for Diablo II: Resurrected.**
 
-D2R Vault **never** touches the game itself: no memory reads, no file
-modification, no code injection, no automated clicks or keypresses sent into
-D2R. Everything happens externally via screen capture and a global hotkey.
+D2R Treasure Vault reads the `items.db` created by D2R Manager and turns captured stash data into a Diablo-themed browser. Find an item, see exactly where it is stored, price the items you want to sell, and create a formatted d2jsp post without editing your database.
 
-```
-PLAY D2R → Hover Item → F9 → OCR → Confirm → SAVE → Continue Playing
-```
+> **Current release: [D2R Treasure Vault v0.2](https://github.com/DaddyDeesel/D2R-Vault/releases/tag/v0.2)** · Windows 10/11 x64
 
-## Status: Phases 1–5 complete, Phase 6/7 partial
+## Download
 
-This is a real, running application — not a mockup — built in the phased order
-the spec calls for.
+1. Open the [v0.2 release](https://github.com/DaddyDeesel/D2R-Vault/releases/tag/v0.2).
+2. Under **Assets**, download `D2R-Treasure-Vault-0.2-Windows-x64.zip`.
+3. Extract the entire ZIP into its own writable folder.
+4. Open `D2R-Treasure-Vault.exe`. Keep the `_internal` folder beside it.
+5. In **Settings**, select the `items.db` created by D2R Manager.
+6. Run `Stop D2R Treasure Vault.cmd` when finished.
 
-| Phase | Status |
-|---|---|
-| 1. Foundation (project setup, DB, models, character CRUD) | ✅ Done |
-| 2. Inventory (grid view, drag/drop placement, collision detection) | ✅ Done |
-| 3. Capture (global F9 hotkey, screen capture, region config) | ✅ Done |
-| 4. OCR (multi-pass preprocessing, Tesseract, confidence scoring) | ✅ Done |
-| 5. Parser (name/quality/base detection, stat parsing, fuzzy matching) | ✅ Done |
-| 6. Advanced (Rapid Scan, duplicates, favorites, search, Grail tracking, demo mode) | ✅ Core done, wishlists/build planner/comparison UI not yet built |
-| 7. Polish (tray, notifications, backups, export, settings) | ✅ Core done, installer/icons not yet built |
+Python, Codex, Tesseract, and an installer are not required for the Windows release.
 
-Not yet implemented (models exist where noted, but no UI): item comparison
-view, build planner calculations, wishlist UI, roll-percentage tracking,
-"God Roll"/"Charsi This?"/"Stash Cleanup" extras, OCR-correction feedback loop
-wired into the live parse path (the `ocr_corrections` table and repository
-exist and are ready to be wired in), and a real icon asset pipeline (folders
-exist under `assets/items/`, empty by design — see spec §25, no copyrighted
-assets are bundled).
+## What it does
 
-## Requirements
+### Browse and locate your items
 
-- Windows 10/11 (target platform — screen capture, global hotkeys, and the
-  packaged `.exe` are all Windows-oriented)
-- Python 3.12+
-- [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) installed and
-  on your `PATH`
+- Search by item, base, roll, quality, account, or character.
+- Browse account shared stashes by default.
+- Use **Settings → Select Mules** to include a character's personal stash and carried inventory in the sale view.
+- Click an item name to see its account, character, tab, quantity, and recorded grid position.
+- View the target item highlighted in its stash or inventory grid.
+- Materials without slot coordinates show their account and materials tab.
 
-## Setup
+### Narrow large collections
 
-```bat
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-```
+Collection, character, item-type, and quality filters work together. Examples:
 
-## Run
+- **Set items / Uniques:** helms, gloves, boots, belts, body armor, shields, and weapon families.
+- **Charms:** small, large, grand, and other captured charm types; then Unique or Magic quality.
+- **Jewels:** Unique, Magic, Rare, and other captured qualities.
+- **Materials:** rune, gem, key, essence, token, and RotW material groups.
 
-```bat
-python -m app.main
-```
+### Follow stash changes
 
-On first launch the app creates `data\d2r_vault.db` and opens an empty
-Character Vault. Create a character, open it, then set your capture region in
-**Settings → Capture** (start with **Fixed Region** — draw a box around where
-D2R tooltips usually appear on your screen — then try **Test Capture**).
-**Automatic** tooltip detection is also implemented as a best-effort heuristic
-you can switch to once Fixed Region is working reliably, per the spec's own
-guidance to get a reliable configurable region working first.
+The **Inventory Log** button sits beside the live stash status.
 
-To try the UI without D2R running:
+- Additions are green and removals are red.
+- Stack changes show the actual unit difference, such as `20 → 17` as `−3`.
+- Expand an entry for its previous and current locations.
+- Filter the log to additions, removals, moves, or detail changes.
+- Choose individual collections to log in Settings, or use **All collections** / **None**.
+- Logging tracks stashes only by default. **Include carried inventory** is optional.
+- Each database and inventory mode keeps separate browser history.
 
-```python
-from app.database.database import get_session_factory
-from app.services.demo_data import load_demo_data
+The first capture establishes a baseline. A removed item is absent from the latest tracked capture; the app does not assume it was sold.
 
-session = get_session_factory()()
-load_demo_data(session)
-```
+### Build a d2jsp sale post
 
-## Tests
+- Select individual listings or all matching filtered results.
+- Add manual FG prices per item or for the whole displayed quantity.
+- Open a targeted d2jsp price search beside each price control.
+- Generate an organized BBCode post.
+- Edit and preview bold, italic, underline, and color formatting.
+- Copy the result or download it as a text file.
 
-```bat
-pip install -r requirements-dev.txt
-pytest
-```
+D2R Treasure Vault does not scrape d2jsp and does not publish posts automatically.
 
-`tests/test_normalize.py`, `test_stat_parser.py`, and `test_item_parser.py`
-cover the OCR-tolerant parsing pipeline directly (no GUI/DB/OCR-engine
-dependencies — these were verified to pass during development).
-`tests/test_services.py` covers character/item/inventory CRUD, duplicate
-detection, collision detection, and search, using an in-memory SQLite DB via
-`tests/conftest.py`.
+## Inventory rules
 
-## Building the Windows executable
+- The selected database is opened read-only.
+- `drop_log` is never treated as inventory.
+- Equipped items and mercenary gear are excluded.
+- Shared stash duplicates from old snapshots are not intentionally added to the current sale view.
+- Runes are ordered from El through Zod.
+- Gems are grouped by gem type, then Chipped, Flawed, regular, Flawless, and Perfect.
+- Material quantities are combined into one listing.
+- Important variable rolls are shown for Sets, Uniques, and Runewords.
 
-```bat
-build_windows.bat
-```
+## Data and privacy
 
-Produces `dist\D2R-Vault.exe` via PyInstaller. Tesseract itself is **not**
-bundled — it must be installed separately on the machine running the `.exe`
-(see Requirements above), or you can point
-`pytesseract.pytesseract.tesseract_cmd` in `app/ocr/ocr_engine.py` at a
-portable Tesseract binary you ship alongside the app.
+The app runs locally at `http://127.0.0.1:8766/` and binds only to your computer's loopback interface. It does not require a cloud account or telemetry service.
 
-## Architecture
+The release ZIP contains application files, item reference tables, and artwork. It does not contain the developer's inventory, database paths, prices, drafts, selections, or activity log. Your selected database remains in its original location. App runtime files are stored in `user-data` beside the executable; prices, drafts, mule choices, logging preferences, and log summaries are saved by your browser.
 
-```
-app/
-  main.py              entry point
-  config.py            paths, constants, persisted Settings
-  database/            SQLAlchemy models, engine/session, repositories
-  gui/                 PySide6 views (dark-fantasy themed)
-  capture/             screen capture, global hotkeys, tooltip region detection
-  ocr/                 image preprocessing + Tesseract wrapper (swappable engine)
-  parser/              OCR-tolerant text → structured ParsedItem
-  services/            business logic layer (character/item/inventory/search/
-                        export/backup/capture orchestration)
-tests/                 pytest suite
-data/                  SQLite DB, backups, saved capture screenshots
-assets/                item icon folders (bring your own, see spec §25)
-```
+Share the original release ZIP. Do not repackage a used installation's `user-data` folder unless you intend to share its local inventory data.
 
-Every layer is swappable by design (spec §50): `OCREngine`, `ScreenCapture`,
-and `ItemParser`-equivalent logic are all defined as small interfaces with a
-mock implementation used in tests, so Tesseract can later be replaced with a
-different OCR engine or an AI vision model without touching the GUI or
-database code.
+## Source layout
 
-## Privacy
-
-All data is local. No cloud account, no telemetry, no Battle.net interaction,
-no network connection required to run the core application.
-
----
-
-## v0.2 quick start on Windows
-
-The easiest source-code launch is now:
-
-```bat
-setup_and_run_windows.bat
-```
-
-It creates `.venv`, installs `requirements.txt`, and launches the app. You still
-need the **Tesseract OCR engine** installed separately. If Tesseract is not on
-PATH, open **Settings → OCR → Browse** and select `tesseract.exe` (commonly
-`C:\Program Files\Tesseract-OCR\tesseract.exe`).
-
-For a packaged build, run:
-
-```bat
-build_windows.bat
-```
-
-The one-file build stores your mutable data outside the temporary PyInstaller
-bundle under:
+The released Treasure Vault implementation is under [`treasure_vault/`](treasure_vault/):
 
 ```text
-%LOCALAPPDATA%\D2R Vault\data
+treasure_vault/
+  live/       local HTTP reader and browser interface
+  support/    inventory organization and D2R reference tables
+  desktop.py  Windows portable-app launcher used by the release build
 ```
 
-That folder contains the SQLite database, settings, backups, and saved capture
-screenshots. See `CHANGELOG-v0.2.md` for the fixes added in this release.
+The older OCR/F9 prototype remains under [`app/`](app/) for history. It is a separate application and is not the v0.2 Windows release described on this page.
+
+For local development, use Python 3.12+ and place `item_assets.db` beside the D2R Manager `items.db`. Then run:
+
+```powershell
+python treasure_vault/live/launch.py
+```
+
+The browser opens on port 8765 for development. Choose `items.db` in Settings. The source reader requires the supplied reference tables under `treasure_vault/support/`; a release build includes its own compact artwork database.
+
+## Reporting a problem
+
+Use the repository's [bug report form](https://github.com/DaddyDeesel/D2R-Vault/issues/new?template=bug_report.yml). Include:
+
+- D2R Treasure Vault version and Windows version
+- steps to reproduce
+- expected and actual results
+- whether the problem occurs after a fresh restart
+
+Screenshots are useful after hiding account and character names. Review `reader.log` before sharing it because it may contain local file paths. Do not attach `items.db`, `user-data`, or browser storage unless you explicitly intend to share that data.
+
+## Known limits
+
+- The Windows build is currently unsigned, so Windows may show an unknown-publisher warning.
+- Item names and stats depend on the captured D2R Manager data.
+- Identical copies and older shared snapshots cannot always be matched conclusively across captures.
+- Grid locations are available only when the source database recorded valid coordinates.
+- The current release targets Softcore Ladder RotW, PC / Americas.
+
+See [CHANGELOG.md](CHANGELOG.md) for release details.
