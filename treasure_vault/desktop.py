@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 import webbrowser
 
-VERSION='0.2'
+VERSION='0.3'
 BUNDLE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent))
 APP_HOME=Path(sys.executable).resolve().parent if getattr(sys,'frozen',False) else Path(__file__).resolve().parent
 

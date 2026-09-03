@@ -4,12 +4,12 @@
 
 D2R Treasure Vault reads the `items.db` created by D2R Manager and turns captured stash data into a Diablo-themed browser. Find an item, see exactly where it is stored, price the items you want to sell, and create a formatted d2jsp post without editing your database.
 
-> **Current release: [D2R Treasure Vault v0.2](https://github.com/DaddyDeesel/D2R-Vault/releases/tag/v0.2)** · Windows 10/11 x64
+> **Current release: [D2R Treasure Vault v0.3](https://github.com/DaddyDeesel/D2R-Vault/releases/tag/v0.3)** · Windows 10/11 x64
 
 ## Download
 
-1. Open the [v0.2 release](https://github.com/DaddyDeesel/D2R-Vault/releases/tag/v0.2).
-2. Under **Assets**, download `D2R-Treasure-Vault-0.2-Windows-x64.zip`.
+1. Open the [v0.3 release](https://github.com/DaddyDeesel/D2R-Vault/releases/tag/v0.3).
+2. Under **Assets**, download `D2R-Treasure-Vault-0.3-Windows-x64.zip`.
 3. Extract the entire ZIP into its own writable folder.
 4. Open `D2R-Treasure-Vault.exe`. Keep the `_internal` folder beside it.
 5. In **Settings**, select the `items.db` created by D2R Manager.
@@ -36,6 +36,7 @@ Collection, character, item-type, and quality filters work together. Examples:
 - **Charms:** small, large, grand, and other captured charm types; then Unique or Magic quality.
 - **Jewels:** Unique, Magic, Rare, and other captured qualities.
 - **Materials:** rune, gem, key, essence, token, and RotW material groups.
+- Save any search and filter combination for quick access later. An optional live pricing rule keeps lists such as “unpriced unique weapons” current as prices change. Saved searches stay tucked beneath the filters until opened.
 
 ### Follow stash changes
 
@@ -59,6 +60,7 @@ The first capture establishes a baseline. A removed item is absent from the late
 - Generate an organized BBCode post.
 - Edit and preview bold, italic, underline, and color formatting.
 - Copy the result or download it as a text file.
+- Back up selected listings, asking prices, and recorded locations as JSON or CSV from Settings, then import the file to restore items that are still available.
 
 D2R Treasure Vault does not scrape d2jsp and does not publish posts automatically.
 
@@ -77,7 +79,7 @@ D2R Treasure Vault does not scrape d2jsp and does not publish posts automaticall
 
 The app runs locally at `http://127.0.0.1:8766/` and binds only to your computer's loopback interface. It does not require a cloud account or telemetry service.
 
-The release ZIP contains application files, item reference tables, and artwork. It does not contain the developer's inventory, database paths, prices, drafts, selections, or activity log. Your selected database remains in its original location. App runtime files are stored in `user-data` beside the executable; prices, drafts, mule choices, logging preferences, and log summaries are saved by your browser.
+The release ZIP contains application files, item reference tables, and artwork. It does not contain the developer's inventory, database paths, prices, drafts, selections, saved searches, or activity log. Your selected database remains in its original location. App runtime files are stored in `user-data` beside the executable; prices, drafts, mule choices, saved searches, logging preferences, and log summaries are saved by your browser.
 
 Share the original release ZIP. Do not repackage a used installation's `user-data` folder unless you intend to share its local inventory data.
 
@@ -92,7 +94,7 @@ treasure_vault/
   desktop.py  Windows portable-app launcher used by the release build
 ```
 
-The older OCR/F9 prototype remains under [`app/`](app/) for history. It is a separate application and is not the v0.2 Windows release described on this page.
+The older OCR/F9 prototype remains under [`app/`](app/) for history. It is a separate application and is not the v0.3 Windows release described on this page.
 
 For local development, use Python 3.12+ and place `item_assets.db` beside the D2R Manager `items.db`. Then run:
 

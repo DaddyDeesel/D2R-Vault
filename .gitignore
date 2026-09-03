@@ -9,6 +9,7 @@ data/settings.json
 data/backups/*.db
 data/captures/
 logs/*.log
+outputs/
 .pytest_cache/
 
 # D2R Treasure Vault local runtime

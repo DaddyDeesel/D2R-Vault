@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3 — 2026-09-02
+
+D2R Treasure Vault v0.3 adds portable trade-list backups and reusable smart searches without crowding the main inventory view.
+
+### Added
+
+- Saved searches for reusable query, collection, character, item-type, quality, and live priced/unpriced filter combinations.
+- JSON and CSV trade-list backups containing selected listings, asking prices, and recorded locations.
+- Trade-list import that restores available selections and prices, with stable identity fallback and a clear count of unavailable items.
+
 ## v0.2 — 2026-09-02
 
 D2R Treasure Vault v0.2 is the first full portable release of the stash browser and d2jsp sales workflow.

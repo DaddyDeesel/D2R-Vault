@@ -101,5 +101,41 @@ const VaultLogic=(()=>{
     if(!draft||!draft.dirty)return{text:generated,base:generated,dirty:false,stale:false};
     return{...draft,stale:draft.base!==generated};
   }
-  return{key,itemType,characters,ownershipLabel,locationLabel,isMaterial,isShared,filter,reconcile,muleOptions,inventoryScope,exportPost,priceEntry,priceLabel,pricingSummary,priceSearchURL,colorValue,parseBBCode,formatSelection,syncDraft};
+  function tradeList(data,selected,prices={},exportedAt=new Date().toISOString()){
+    const items=data.items.filter(item=>selected.has(key(item))).map(item=>({
+      key:key(item),identitySignature:item.identitySignature||'',name:item.name,item:item.item||'',category:item.category||'',quality:item.quality||'',base:item.base||'',rolls:item.rolls||'',quantity:item.quantity,price:prices[key(item)]||null,
+      locations:(item.locations||[]).map(place=>({account:place.account||'',character:place.character||'',tab:place.tab||'',x:place.x,y:place.y,quantity:place.quantity}))
+    }));
+    return{format:'d2r-treasure-vault-trade-list',version:1,exportedAt,sourceId:data.sourceId||'',items};
+  }
+  const csvCell=value=>'"'+String(value??'').replace(/"/g,'""')+'"';
+  function tradeListCSV(data,selected,prices={}){
+    const backup=tradeList(data,selected,prices);const headings=['key','identitySignature','name','item','category','quality','base','rolls','quantity','priceAmount','priceBasis','locations'];
+    const rows=backup.items.map(item=>[item.key,item.identitySignature,item.name,item.item,item.category,item.quality,item.base,item.rolls,item.quantity,item.price?.amount||'',item.price?.basis||'',item.locations.map(place=>locationLabel(item,place)).join(' | ')]);
+    return[headings,...rows].map(row=>row.map(csvCell).join(',')).join('\r\n')+'\r\n';
+  }
+  function parseCSV(text){
+    const rows=[];let row=[],cell='',quoted=false;
+    for(let i=0;i<text.length;i++){const char=text[i];if(quoted){if(char==='"'&&text[i+1]==='"'){cell+='"';i++;}else if(char==='"')quoted=false;else cell+=char;}else if(char==='"')quoted=true;else if(char===','){row.push(cell);cell='';}else if(char==='\n'){row.push(cell.replace(/\r$/,''));rows.push(row);row=[];cell='';}else cell+=char;}
+    if(quoted)throw new Error('The CSV file has an unfinished quoted value.');if(cell||row.length){row.push(cell.replace(/\r$/,''));rows.push(row);}return rows;
+  }
+  function readTradeList(text,filename=''){
+    text=String(text).replace(/^\uFEFF/,'');let imported;
+    if(filename.toLowerCase().endsWith('.csv')||String(text).trimStart().startsWith('"key"')){
+      const rows=parseCSV(String(text));if(rows.length<2)throw new Error('The CSV trade list does not contain any items.');const headings=rows.shift();const at=name=>headings.indexOf(name);if(at('key')<0||at('name')<0)throw new Error('This CSV is not a D2R Treasure Vault trade list.');
+      imported=rows.filter(row=>row.some(Boolean)).map(row=>({key:row[at('key')],identitySignature:at('identitySignature')<0?'':row[at('identitySignature')],name:row[at('name')],price:at('priceAmount')>=0&&row[at('priceAmount')]?{amount:row[at('priceAmount')],basis:row[at('priceBasis')]||'each'}:null}));
+    }else{
+      let parsed;try{parsed=JSON.parse(text);}catch{throw new Error('Choose a valid JSON or CSV trade-list backup.');}
+      if(parsed?.format!=='d2r-treasure-vault-trade-list'||parsed.version!==1||!Array.isArray(parsed.items))throw new Error('This JSON is not a supported D2R Treasure Vault trade list.');imported=parsed.items;
+    }
+    if(!imported.length)throw new Error('The trade-list backup does not contain any items.');if(imported.length>10000)throw new Error('This trade list is too large to import.');return imported;
+  }
+  function restoreTradeList(imported,items){
+    const byKey=new Map(items.map(item=>[key(item),item])),bySignature=new Map();for(const item of items){if(!item.identitySignature)continue;const group=bySignature.get(item.identitySignature)||[];group.push(item);bySignature.set(item.identitySignature,group);}
+    const keys=[],restoredPrices={},missing=[];
+    for(const saved of imported){let item=byKey.get(saved.key);if(!item&&saved.identitySignature){const matches=bySignature.get(saved.identitySignature)||[];if(matches.length===1)item=matches[0];}if(!item){missing.push(saved.name||saved.key||'Unknown item');continue;}const id=key(item);if(!keys.includes(id))keys.push(id);if(saved.price){try{restoredPrices[id]=priceEntry(saved.price.amount,saved.price.basis);}catch{}}
+    }
+    return{keys,prices:restoredPrices,missing};
+  }
+  return{key,itemType,characters,ownershipLabel,locationLabel,isMaterial,isShared,filter,reconcile,muleOptions,inventoryScope,exportPost,priceEntry,priceLabel,pricingSummary,priceSearchURL,colorValue,parseBBCode,formatSelection,syncDraft,tradeList,tradeListCSV,readTradeList,restoreTradeList};
 })();

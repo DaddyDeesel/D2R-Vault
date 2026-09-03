@@ -1,25 +1,27 @@
 'use strict';
 (()=>{
   const el=id=>document.getElementById(id);
-  const ui=Object.fromEntries(['connection-state','last-checked','refresh','collections','source-time','collection-title','result-count','search','character','category','select-matching','clear-selection','selected-only','selection-count','export','notice','export-panel','close-export','post-text','copy-post','download-post','export-status','item-detail','items','page-status','previous','next','format-bold','format-italic','format-underline','format-color','apply-color','rebuild-post','restore-draft','draft-warning','draft-warning-text','accept-draft','post-preview','composer-help','set-prices','price-summary','pricing-panel','close-pricing','bulk-price-editor','mule-summary','mule-list','all-mules','clear-mules','settings','settings-panel','close-settings','settings-form','database-path','browse-database','save-settings','settings-status','quantity-breakdown','changes-summary','changes-status','clear-changes','changes-list','changes-totals','changes-filters','log-include-inventory','log-settings-status','changes-scope','open-log','close-log','changes-panel','log-collection-list','log-all-collections','log-no-collections','item-type','item-quality','clear-refinements','refinement-heading'].map(id=>[id,el(id)]));
+  const ui=Object.fromEntries(['connection-state','last-checked','refresh','collections','source-time','collection-title','result-count','search','character','category','select-matching','clear-selection','selected-only','selection-count','export','notice','export-panel','close-export','post-text','copy-post','download-post','export-status','item-detail','items','page-status','previous','next','format-bold','format-italic','format-underline','format-color','apply-color','rebuild-post','restore-draft','draft-warning','draft-warning-text','accept-draft','post-preview','composer-help','set-prices','price-summary','pricing-panel','close-pricing','bulk-price-editor','mule-summary','mule-list','all-mules','clear-mules','settings','settings-panel','close-settings','settings-form','database-path','browse-database','save-settings','settings-status','quantity-breakdown','changes-summary','changes-status','clear-changes','changes-list','changes-totals','changes-filters','log-include-inventory','log-settings-status','changes-scope','open-log','close-log','changes-panel','log-collection-list','log-all-collections','log-no-collections','item-type','item-quality','clear-refinements','refinement-heading','saved-search-count','save-search-form','saved-search-name','saved-search-list','saved-search-status','price-filter','download-trade-json','download-trade-csv','import-trade-list','trade-list-file','trade-list-status'].map(id=>[id,el(id)]));
   let data={items:[],images:{},sectionHeaders:{},postHeader:''};let selected=new Set();let category='';let page=0;const pageSize=16;let busy=false;let downloadURL='';let detailKey=null;let knownVersion=null;let hasCurrentConnection=false;let connectionProblem=false;
   let draftStorage='d2r-treasure-vault-draft-v1';let draft=null;let backupDraft=null;let previewText=null;let downloadText=null;let savedState='';
   let priceStorage='d2r-treasure-vault-prices-v1';const prices=Object.create(null);
   let muleStorage='d2r-treasure-vault-mules-v1';let mules=new Set();let rawData=null;
+  let savedSearchStorage='d2r-treasure-vault-saved-searches-v1';let savedSearches=[];let tradeListStatus='';
   let activeSource=null;let switchingDatabase=false;let setupPrompted=false;
   function useSource(incoming){
     if(!incoming.sourceId||incoming.sourceId===activeSource)return;
     activeSource=incoming.sourceId;
-    const baseKeys=['d2r-treasure-vault-draft-v1','d2r-treasure-vault-prices-v1','d2r-treasure-vault-mules-v1'];
+    const baseKeys=['d2r-treasure-vault-draft-v1','d2r-treasure-vault-prices-v1','d2r-treasure-vault-mules-v1','d2r-treasure-vault-saved-searches-v1'];
     const keys=baseKeys.map(key=>key+':'+activeSource);
     try{if(activeSource===incoming.legacySourceId)for(let i=0;i<keys.length;i++){if(localStorage.getItem(keys[i])===null){const prior=localStorage.getItem(baseKeys[i]);if(prior!==null)localStorage.setItem(keys[i],prior);}}}catch{}
-    [draftStorage,priceStorage,muleStorage]=keys;
-    draft=null;backupDraft=null;savedState='';previewText=null;downloadText=null;selected=new Set();mules=new Set();
+    [draftStorage,priceStorage,muleStorage,savedSearchStorage]=keys;
+    draft=null;backupDraft=null;savedState='';previewText=null;downloadText=null;selected=new Set();mules=new Set();savedSearches=[];tradeListStatus='';
     for(const key of Object.keys(prices))delete prices[key];
   try{const saved=JSON.parse(localStorage.getItem(muleStorage)||'[]');if(Array.isArray(saved))mules=new Set(saved.filter(id=>typeof id==='string'));}catch{}
   try{const saved=JSON.parse(localStorage.getItem(priceStorage)||'{}');for(const [id,price] of Object.entries(saved)){try{prices[id]=VaultLogic.priceEntry(price.amount,price.basis);}catch{}}}catch{}
   try{const saved=JSON.parse(localStorage.getItem(draftStorage)||'null');if(saved&&typeof saved.text==='string'&&typeof saved.base==='string'){draft={text:saved.text,base:saved.base,dirty:saved.text!==saved.base,stale:false};if(Array.isArray(saved.selected))selected=new Set(saved.selected.filter(x=>typeof x==='string'));if(saved.backup&&typeof saved.backup.text==='string'&&typeof saved.backup.base==='string')backupDraft=saved.backup;}}catch{}
-    category='';ui['item-type'].value='';ui['item-quality'].value='';page=0;detailKey=null;ui['item-detail'].hidden=true;ui['export-panel'].hidden=true;ui['pricing-panel'].hidden=true;ui.search.value='';ui['selected-only'].checked=false;
+  try{const saved=JSON.parse(localStorage.getItem(savedSearchStorage)||'[]');if(Array.isArray(saved))savedSearches=saved.filter(entry=>entry&&typeof entry.id==='string'&&typeof entry.name==='string'&&entry.filters).slice(0,20);}catch{}
+    category='';ui['item-type'].value='';ui['item-quality'].value='';ui['price-filter'].value='';page=0;detailKey=null;ui['item-detail'].hidden=true;ui['export-panel'].hidden=true;ui['pricing-panel'].hidden=true;ui.search.value='';ui['selected-only'].checked=false;
   }
   const make=(tag,text,cls)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;};
   const time=value=>value?new Date(value).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—';
@@ -144,7 +146,7 @@
     form.onsubmit=event=>{event.preventDefault();apply(false);};clear.onclick=()=>apply(true);form.append(amountLabel,basisLabel,save,clear,status);
     return form;
   }
-  function filtered(){return VaultLogic.filter(data.items,{query:ui.search.value,character:ui.character.value,category,type:ui['item-type'].value,quality:ui['item-quality'].value,selectedOnly:ui['selected-only'].checked,selected});}
+  function filtered(){const rows=VaultLogic.filter(data.items,{query:ui.search.value,character:ui.character.value,category,type:ui['item-type'].value,quality:ui['item-quality'].value,selectedOnly:ui['selected-only'].checked,selected}),pricing=ui['price-filter'].value;return pricing?rows.filter(item=>(pricing==='priced')===!!prices[VaultLogic.key(item)]):rows;}
   function collectionControls(){
     const counts=new Map();for(const item of data.items)counts.set(item.category,(counts.get(item.category)||0)+1);
     if(category&&!counts.has(category))category='';
@@ -168,6 +170,19 @@
       control.disabled=!counts.size;
     }
     ui['refinement-heading'].textContent='Narrow '+(category||'all treasures');ui['clear-refinements'].disabled=!ui['item-type'].value&&!ui['item-quality'].value;
+  }
+  function currentFilters(){return{query:ui.search.value.trim(),character:ui.character.value,category,type:ui['item-type'].value,quality:ui['item-quality'].value,pricing:ui['price-filter'].value};}
+  const sameFilters=(left,right)=>['query','character','category','type','quality','pricing'].every(field=>(left[field]||'')===(right[field]||''));
+  function persistSavedSearches(){try{localStorage.setItem(savedSearchStorage,JSON.stringify(savedSearches));return true;}catch{return false;}}
+  function applySavedSearch(entry){
+    const filters=entry.filters||{};category=filters.category||'';ui.search.value=filters.query||'';ui['item-type'].value='';ui['item-quality'].value='';ui['price-filter'].value=filters.pricing||'';ui['selected-only'].checked=false;collectionControls();
+    if([...ui.character.options].some(option=>option.value===(filters.character||'')))ui.character.value=filters.character||'';refinementControls();
+    if([...ui['item-type'].options].some(option=>option.value===(filters.type||'')))ui['item-type'].value=filters.type||'';if([...ui['item-quality'].options].some(option=>option.value===(filters.quality||'')))ui['item-quality'].value=filters.quality||'';
+    page=0;ui['saved-search-status'].textContent='Showing “'+entry.name+'”.';render();
+  }
+  function renderSavedSearches(){
+    const pricing=ui['price-filter'].value;ui['saved-search-count'].textContent=(savedSearches.length?savedSearches.length+' saved':'None saved')+(pricing?' · '+(pricing==='priced'?'Priced':'Unpriced')+' active':'');ui['saved-search-list'].replaceChildren();const active=currentFilters();
+    for(const entry of savedSearches){const chip=make('span',undefined,'saved-search-chip'+(sameFilters(active,entry.filters)?' active':''));const apply=make('button',entry.name);apply.type='button';apply.title='Apply saved search';apply.onclick=()=>applySavedSearch(entry);const remove=make('button','×','saved-search-delete');remove.type='button';remove.title='Delete '+entry.name;remove.setAttribute('aria-label','Delete saved search '+entry.name);remove.onclick=()=>{savedSearches=savedSearches.filter(saved=>saved.id!==entry.id);const saved=persistSavedSearches();ui['saved-search-status'].textContent='Deleted “'+entry.name+'”.'+(saved?'':' Browser storage is unavailable.');renderSavedSearches();};chip.append(apply,remove);ui['saved-search-list'].append(chip);}
   }
   function saveDraft(){
     if(!draft||knownVersion===null)return;
@@ -201,7 +216,8 @@
     ui['export-status'].textContent=!hasCurrentConnection?'Reconnect to the stash before exporting.':draft.stale?'Review inventory changes before exporting.':text?(draft.dirty?'Edited draft':'Generated draft')+' · '+selected.size+' selected listings · '+text.length.toLocaleString()+' characters':'Select a treasure to begin.';
     saveDraft();
   }
-  function selectionStatus(){ui['selection-count'].textContent=selected.size+' selected';ui.export.disabled=(!selected.size&&!draft?.text)||!hasCurrentConnection;ui['clear-selection'].disabled=!selected.size;ui['set-prices'].disabled=!selected.size;const summary=VaultLogic.pricingSummary(data.items,selected,prices);ui['price-summary'].textContent=selected.size?summary.priced+' priced · '+summary.unpriced+' unpriced · '+summary.total.toLocaleString(undefined,{maximumFractionDigits:2})+' fg asking total for priced stock':'Select listings to price your sale.';if(draft||!ui['export-panel'].hidden)exportText();}
+  function tradeListControls(){ui['download-trade-json'].disabled=!selected.size;ui['download-trade-csv'].disabled=!selected.size;ui['import-trade-list'].disabled=knownVersion===null||!data.items.length;ui['trade-list-status'].textContent=tradeListStatus||(selected.size?'Ready to back up '+selected.size+' selected listing'+(selected.size===1?'':'s')+'.':'Select listings in the vault to create a backup.');}
+  function selectionStatus(){ui['selection-count'].textContent=selected.size+' selected';ui.export.disabled=(!selected.size&&!draft?.text)||!hasCurrentConnection;ui['clear-selection'].disabled=!selected.size;ui['set-prices'].disabled=!selected.size;const summary=VaultLogic.pricingSummary(data.items,selected,prices);ui['price-summary'].textContent=selected.size?summary.priced+' priced · '+summary.unpriced+' unpriced · '+summary.total.toLocaleString(undefined,{maximumFractionDigits:2})+' fg asking total for priced stock':'Select listings to price your sale.';tradeListControls();if(draft||!ui['export-panel'].hidden)exportText();}
   function locate(item){
     detailKey=VaultLogic.key(item);const panel=ui['item-detail'];panel.hidden=false;panel.replaceChildren();
     const heading=make('div',undefined,'panel-heading');const title=make('div');title.append(make('p','LOCATION IN YOUR VAULT','eyebrow'),make('h3',item.name));const close=make('button','Close','button quiet');close.type='button';close.onclick=()=>{panel.hidden=true;detailKey=null;};heading.append(title,close);panel.append(heading);
@@ -213,6 +229,7 @@
   }
   function render(){
     refinementControls();
+    renderSavedSearches();
     const rows=filtered();const pages=Math.max(1,Math.ceil(rows.length/pageSize));page=Math.min(page,pages-1);
     ui['collection-title'].textContent=category||'All treasures';ui['result-count'].textContent=rows.length.toLocaleString()+' listings · '+rows.reduce((n,i)=>n+i.quantity,0).toLocaleString()+' total quantity (including stacks)';ui.items.replaceChildren();const totals=new Map();for(const item of rows)totals.set(item.category,(totals.get(item.category)||0)+item.quantity);ui['quantity-breakdown'].replaceChildren();for(const [name,total] of totals){const row=make('div');row.append(make('dt',name),make('dd',total.toLocaleString()));ui['quantity-breakdown'].append(row);}
     for(const item of rows.slice(page*pageSize,(page+1)*pageSize)){
@@ -224,6 +241,10 @@
     }
     if(!rows.length){const tr=make('tr');const td=make('td',data.items.length?'No treasures match these filters.':'No eligible stash items found.','empty');td.colSpan=4;tr.append(td);ui.items.append(tr);}
     ui['page-status'].textContent='Page '+(page+1)+' of '+pages;ui.previous.disabled=page===0;ui.next.disabled=page===pages-1;ui['select-matching'].disabled=!rows.length;selectionStatus();
+  }
+  function downloadFile(contents,type,filename){const url=URL.createObjectURL(new Blob([contents],{type}));const link=make('a');link.href=url;link.download=filename;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),0);}
+  function downloadTradeList(format){
+    if(!selected.size)return;const day=new Date().toISOString().slice(0,10);if(format==='json')downloadFile(JSON.stringify(VaultLogic.tradeList(data,selected,prices),null,2),'application/json;charset=utf-8','d2r-trade-list-'+day+'.json');else downloadFile('\uFEFF'+VaultLogic.tradeListCSV(data,selected,prices),'text/csv;charset=utf-8','d2r-trade-list-'+day+'.csv');tradeListStatus='Downloaded '+selected.size+' selected listing'+(selected.size===1?'':'s')+' as '+format.toUpperCase()+'.';tradeListControls();
   }
   async function poll(){
     if(busy)return;busy=true;
@@ -271,6 +292,10 @@
   ui['close-log'].onclick=()=>{showLog(false);ui['open-log'].focus();};
   ui['item-type'].onchange=ui['item-quality'].onchange=()=>{page=0;render();};
   ui['clear-refinements'].onclick=()=>{ui['item-type'].value='';ui['item-quality'].value='';page=0;render();};
+  ui['price-filter'].onchange=()=>{page=0;render();};
+  ui['save-search-form'].onsubmit=event=>{event.preventDefault();const name=ui['saved-search-name'].value.trim(),filters=currentFilters();if(!name)return;if(!Object.values(filters).some(Boolean)){ui['saved-search-status'].textContent='Choose at least one filter before saving this search.';return;}const existing=savedSearches.find(entry=>entry.name.toLowerCase()===name.toLowerCase());if(existing){existing.name=name;existing.filters=filters;}else{if(savedSearches.length>=20){ui['saved-search-status'].textContent='You can save up to 20 searches. Delete one before adding another.';return;}savedSearches.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),name,filters});}const saved=persistSavedSearches();ui['saved-search-name'].value='';ui['saved-search-status'].textContent=(existing?'Updated ':'Saved ')+'“'+name+'”.'+(saved?'':' Browser storage is unavailable; this search lasts only while the page stays open.');renderSavedSearches();};
+  ui['download-trade-json'].onclick=()=>downloadTradeList('json');ui['download-trade-csv'].onclick=()=>downloadTradeList('csv');ui['import-trade-list'].onclick=()=>ui['trade-list-file'].click();
+  ui['trade-list-file'].onchange=async()=>{const file=ui['trade-list-file'].files?.[0];ui['trade-list-file'].value='';if(!file)return;if(file.size>5*1024*1024){tradeListStatus='That file is larger than the 5 MB import limit.';tradeListControls();return;}try{const imported=VaultLogic.readTradeList(await file.text(),file.name),restored=VaultLogic.restoreTradeList(imported,data.items);if(!restored.keys.length)throw new Error('None of the backed-up items are available in the current sale scope. Check Select Mules and try again.');selected=new Set(restored.keys);for(const id of restored.keys)delete prices[id];Object.assign(prices,restored.prices);let saved=true;try{localStorage.setItem(priceStorage,JSON.stringify(prices));}catch{saved=false;}ui['selected-only'].checked=false;page=0;const missing=restored.missing.length;tradeListStatus='Restored '+restored.keys.length+' listing'+(restored.keys.length===1?'':'s')+' and '+Object.keys(restored.prices).length+' price'+(Object.keys(restored.prices).length===1?'':'s')+'.'+(missing?' '+missing+' unavailable item'+(missing===1?' was':'s were')+' skipped.':'')+(saved?'':' Browser storage is unavailable; restored prices last only while this page stays open.');notify(tradeListStatus);render();}catch(error){tradeListStatus=error.message||'Could not import this trade-list backup.';tradeListControls();}};
   ui['log-all-collections'].onclick=()=>{excludedLogCollections=[];saveLogCollections();};
   ui['log-no-collections'].onclick=()=>{excludedLogCollections=availableLogCollections();saveLogCollections();};
   ui.settings.onclick=async()=>{

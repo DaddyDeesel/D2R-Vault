@@ -25,7 +25,7 @@
         </section>
     <section id="settings-panel" class="detail-panel settings-panel" aria-label="Vault settings" hidden>
       <div class="panel-heading"><div><p class="eyebrow">MAKE THE VAULT YOURS</p><h3>Vault settings</h3></div><button id="close-settings" class="button quiet" type="button">Close</button></div>
-      <p class="composer-hint">Choose your D2R Manager items.db. The vault reads it in place and follows updates. Keep its WAL and SHM companion files beside it. Prices, mule choices and drafts are saved separately for each database.</p>
+      <p class="composer-hint">Choose your D2R Manager items.db. The vault reads it in place and follows updates. Keep its WAL and SHM companion files beside it. Prices, mule choices, drafts, and saved searches are saved separately for each database.</p>
       <form id="settings-form"><label for="database-path">Inventory database</label><div class="database-controls"><input id="database-path" type="text" required placeholder="C:\path\to\items.db" autocomplete="off"><button id="browse-database" class="button" type="button">Browse…</button><button id="save-settings" class="button primary" type="submit">Save database</button></div></form>
       <p id="settings-status" class="composer-hint" role="status"></p>
         <details class="mule-picker">
@@ -45,6 +45,13 @@
         <p id="log-settings-status" class="composer-hint" role="status"></p>
       </section>
 
+      <section class="trade-list-settings" aria-labelledby="trade-list-settings-title">
+        <h4 id="trade-list-settings-title">Trade list backups</h4>
+        <p class="composer-hint">Download the current selection with its asking prices and recorded locations. Importing a backup selects every item that is still available and restores its price.</p>
+        <div class="trade-list-actions"><button id="download-trade-json" class="button" type="button" disabled>Download JSON</button><button id="download-trade-csv" class="button" type="button" disabled>Download CSV</button><button id="import-trade-list" class="button quiet" type="button" disabled>Import backup…</button><input id="trade-list-file" type="file" accept=".json,.csv,application/json,text/csv" hidden></div>
+        <p id="trade-list-status" class="composer-hint" role="status">Select listings in the vault to create a backup.</p>
+      </section>
+
     </section>
     <div class="workspace">
       <aside class="collections"><h2>Collections</h2><nav id="collections" aria-label="Item collections"></nav><div class="aside-note"><span class="tiny-heading">YOUR VAULT, IN SYNC</span><p>Account shared tabs, plus personal stash tabs and inventories from your selected mules. Equipped items, mercenary gear and drop history stay out.</p><p id="source-time"></p></div></aside>
@@ -59,6 +66,10 @@
           <label class="mobile-collection">Collection<select id="category"><option value="">All treasures</option></select></label>
         </div>
         <div class="refinement-bar" aria-label="Narrow inventory results"><span id="refinement-heading">Narrow all treasures</span><label>Item type<select id="item-type"><option value="">All item types</option></select></label><label>Quality<select id="item-quality"><option value="">All qualities</option></select></label><button id="clear-refinements" class="button quiet" type="button" disabled>Reset subtypes</button></div>
+        <details class="saved-searches">
+          <summary>Saved searches <span id="saved-search-count">None saved</span></summary>
+          <div class="saved-search-panel"><p class="composer-hint">Add a live pricing rule, then save the current search, collection, character, type, and quality filters for quick access.</p><label class="smart-filter" for="price-filter">Smart pricing filter<select id="price-filter"><option value="">All listings</option><option value="unpriced">Unpriced listings</option><option value="priced">Priced listings</option></select></label><form id="save-search-form" class="save-search-form"><label for="saved-search-name">Name this search</label><div><input id="saved-search-name" type="text" maxlength="50" placeholder="e.g. Unpriced unique weapons" autocomplete="off" required><button class="button" type="submit">Save current filters</button></div></form><div id="saved-search-list" class="saved-search-list" aria-label="Saved searches"></div><p id="saved-search-status" class="composer-hint" role="status"></p></div>
+        </details>
         <div class="selection-bar"><div class="selection-actions"><button id="select-matching" class="button" type="button" disabled>Select matching</button><button id="clear-selection" class="button quiet" type="button" disabled>Clear</button><label class="selected-toggle"><input id="selected-only" type="checkbox"> Selected only</label></div><div class="export-action"><span id="selection-count">0 selected</span><button id="set-prices" class="button" type="button" disabled>Set prices</button><button id="export" class="button primary" type="button" disabled>Create d2jsp post <span aria-hidden="true">↗</span></button></div></div>
         <p id="price-summary" class="composer-hint" aria-live="polite">Select listings to price your sale.</p>
         <section id="pricing-panel" class="detail-panel" aria-label="Price selected listings" hidden>
@@ -91,7 +102,7 @@
         <footer class="pagination"><span id="page-status"></span><div><button id="previous" class="button quiet" type="button" disabled>← Previous</button><button id="next" class="button quiet" type="button" disabled>Next →</button></div></footer>
       </section>
     </div>
-    <footer class="vault-footer"><span id="sync-description">Checks the stash every 5 seconds while this tool is running.</span><span>D2R Treasure Vault v0.2 · Your asking prices in FG</span></footer>
+    <footer class="vault-footer"><span id="sync-description">Checks the stash every 5 seconds while this tool is running.</span><span>D2R Treasure Vault v0.3 · Your asking prices in FG</span></footer>
   </main>
 </body>
 </html>
