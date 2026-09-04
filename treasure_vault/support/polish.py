@@ -39,6 +39,21 @@ gemtypes=['Amethyst','Diamond','Emerald','Ruby','Sapphire','Skull','Topaz']
 tiers=['Chipped','Flawed','','Flawless','Perfect']
 categories=list(dict.fromkeys(r[1] for r in post))
 normalize=lambda value:re.sub('[^a-z0-9]','',value.lower())
+base_code_by_name={normalize(r['name']):r['code'] for table in ['armor','weapons','misc'] for r in read(table) if r.get('name') and r.get('code')}
+unique_by_code=collections.defaultdict(list)
+for definition in unique.values():
+    if definition.get('code') and definition.get('index') and not definition.get('disabled'): unique_by_code[definition['code']].append(definition)
+def unique_definition(r):
+    exact=unique.get(str(r.get('unique_set_id') or ''))
+    if exact:return exact
+    if r.get('quality')!=7 or r.get('identified'):return None
+    matches=unique_by_code.get(base_code_by_name.get(normalize(r.get('base_name','')),''),[])
+    return matches[0] if len(matches)==1 else None
+unidentified_names={}
+for row in post:
+    src=raw_by_ref.get(row[13].split('; ')[0]);definition=unique_definition(src) if src else None
+    if definition:
+        unidentified_names[row[0]]=definition['index'];row[2]=definition['index']+' (Unid)'
 def sorting(row):
     cat,name=row[1],row[2]
     if cat=='Runes': return categories.index(cat),runes.index(name.replace(' Rune','')),0,''
@@ -62,7 +77,7 @@ def compact_rolls(r):
     if r['is_runeword']:
         matches=[d for d in runewords if normalize(d['*Rune Name'])==normalize(r['runeword_name'] or r['item_name'])]
         if matches: definition=matches[0]
-    else: definition=(unique if r['quality']==7 else sets).get(str(r['unique_set_id']))
+    else: definition=unique_definition(r) if r['quality']==7 else sets.get(str(r['unique_set_id']))
     out=[]; missing=[]
     def add(v):
         if v not in out: out.append(v)
@@ -138,8 +153,9 @@ for r in post:
         account=account_label(s)
         rename[old]=name if len(refs)==1 else name+' - '+account
         locations.append({'account':account,'accountKey':account_key(s),'character':s['char_name'],'ownerKey':owner_key(s),'tab':s['stash_type'],'x':s['grid_x'],'y':s['grid_y'],'quantity':s['stack_count'] or 1})
-    definition=(unique if src['quality']==7 else sets if src['quality']==5 else {}).get(str(src['unique_set_id']),{})
-    display_data.append({'key':original_ref,'name':name,'item':r[2],'category':r[1],'itemType':src['item_type'],'base':r[3] if r[3]!=r[2] else '', 'quality':r[4],'quantity':r[5],'rolls':r[7],'eth':r[8]=='Yes','sockets':r[9],'contents':r[10],'locations':locations,'definitionCode':definition.get('code' if src['quality']==7 else 'item','')})
+    definition=unique_definition(src) if src['quality']==7 else sets.get(str(src['unique_set_id']),{}) if src['quality']==5 else {}
+    canonical=unidentified_names.get(original_ref,r[2]);is_unidentified=not bool(src['identified'])
+    display_data.append({'key':original_ref,'name':name,'item':canonical,'category':r[1],'itemType':src['item_type'],'base':r[3] if r[3]!=canonical else '', 'quality':r[4],'quantity':r[5],'rolls':r[7],'identified':not is_unidentified,'unid':is_unidentified,'inferredName':original_ref in unidentified_names,'eth':r[8]=='Yes','sockets':r[9],'contents':r[10],'locations':locations,'definitionCode':definition.get('code' if src['quality']==7 else 'item','') if definition else ''})
     display_data[-1]['identitySignature']=identity_signature(src)
     r[13]='; '.join(rename[old] for old in refs)
     rename[original_ref]=name

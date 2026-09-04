@@ -7,9 +7,10 @@ const VaultLogic=(()=>{
   const characters=item=>isMaterial(item)?[]:[...new Set(item.locations.filter(p=>!isShared(p)).map(p=>p.character))];
   const ownershipLabel=item=>isMaterial(item)?'':[...new Set(item.locations.map(p=>isShared(p)?p.account:p.character+(p.tab==='inventory'?' · Inventory':'')))].join(', ');
   function locationLabel(item,place){
-    const tab=place.tab==='advanced'?'Materials tab':place.tab==='personal'?'Personal tab':place.tab==='inventory'?'Carried inventory':place.tab.replace('shared','Tab ');
-    const owner=isMaterial(item)||isShared(place)?place.account:place.character+' · '+place.account;
-    return owner+' · '+tab+' · x'+place.quantity+(place.tab!=='advanced'?' · column '+(place.x+1)+', row '+(place.y+1):'');
+    if(place.tab==='advanced'){const section=item.category==='Runes'?'Runes':item.category==='Gems'?'Gems':'Materials';return place.account+' - '+section+' - x'+place.quantity;}
+    if(place.tab.startsWith('shared')){const page=Number(place.tab.replace('shared',''))||place.tab.replace('shared','');return place.account+' - Shared Stash - Page '+page+' - x'+place.quantity+' - column '+(place.x+1)+', row '+(place.y+1);}
+    const tab=place.tab==='personal'?'Personal Stash':place.tab==='inventory'?'Carried Inventory':place.tab;
+    return place.character+' - '+place.account+' - '+tab+' - x'+place.quantity+' - column '+(place.x+1)+', row '+(place.y+1);
   }
   const typeLabels={'Helm':'Helms','Primal Helm':'Helms','Druid Pelt':'Helms','Circlet':'Helms','Gloves':'Gloves','Boots':'Boots','Belt':'Belts','Body Armor':'Body armor','Shield':'Shields','Auric Shield':'Shields','Head':'Shields','Grim':'Grimoires','Lcha':'Grand charms','Mcha':'Large charms','Scha':'Small charms','Csch':'Sunder charms','Cjwl':'Colossal jewels','Jewel':'Jewels','Ring':'Rings','Amulet':'Amulets','Sword':'Swords','Axe':'Axes','Bow':'Bows','Amazon Bow':'Bows','Crossbow':'Crossbows','Claw':'Claws','Club':'Clubs','Mace':'Maces','Hammer':'Hammers','Dagger':'Daggers','Javelin':'Javelins','Amazon Javelin':'Javelins','Spear':'Spears','Amazon Spear':'Spears','Polearm':'Polearms','Scepter':'Scepters','Staff':'Staves','Wand':'Wands','Orb':'Orbs','Throwing Axe':'Throwing axes','Throwing Knife':'Throwing knives','Rune':'Runes','Book':'Tomes','Rpot':'Rejuvenation potions'};
   function itemType(item){
@@ -18,9 +19,59 @@ const VaultLogic=(()=>{
     if(item.category==='Keys, essences and tokens'){const name=item.item||item.name;return name.includes('Essence')?'Essences':name.includes('Token')?'Tokens':'Keys';}
     return typeLabels[item.itemType]||item.itemType||'Other';
   }
+  const searchAliases={
+    hoz:['herald of zakarum'],hoto:['heart of the oak'],cta:['call to arms'],soj:['stone of jordan'],bk:['bul kathos'],
+    maras:['kaleidoscope'],viper:['vipermagi'],griff:['griffon eye'],griffons:['griffon eye'],nw:['nightwing veil'],
+    occy:['oculus'],arach:['arachnid mesh'],pcomb:['paladin combat','pally combat'],scomb:['sorceress combat','sorc combat'],
+    skiller:['skill charm','skills grand charm']
+  };
+  const statFields={
+    fcr:['fcr','faster cast rate'],sockets:['sockets','socket','os'],resistance:['resistance','res','allres','all res'],
+    defense:['defense','def'],magicfind:['magic find','mf'],quantity:['quantity','qty']
+  };
+  const normalized=value=>String(value??'').toLowerCase().replace(/[’']/g,'').replace(/[^a-z0-9%+.<>=-]+/g,' ').trim();
+  function searchPlan(query=''){
+    let text=normalized(query),ethereal=null;const comparisons=[];
+    text=text.replace(/\b(?:non[- ]?eth(?:ereal)?|not eth(?:ereal)?)\b/g,()=>{ethereal=false;return' ';});
+    text=text.replace(/\b(?:ethereal|eth)\b/g,()=>{ethereal=true;return' ';});
+    text=text.replace(/\b(\d+)\s*os\b/g,(_,value)=>{comparisons.push({field:'sockets',operator:'=',value:Number(value)});return' ';});
+    const names=Object.entries(statFields).flatMap(([field,aliases])=>aliases.map(alias=>({field,alias}))).sort((a,b)=>b.alias.length-a.alias.length);
+    for(const {field,alias} of names){
+      const escaped=alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+');
+      const expression=new RegExp('\\b'+escaped+'\\s*(>=|<=|=|>|<)\\s*(\\d+(?:\\.\\d+)?)\\b','g');
+      text=text.replace(expression,(_,operator,value)=>{comparisons.push({field,operator,value:Number(value)});return' ';});
+    }
+    const groups=text.split(/\s+/).filter(Boolean).map(term=>({term,aliased:!!searchAliases[term],alternatives:[term,...(searchAliases[term]||[])].map(value=>normalized(value).split(/\s+/))}));
+    return{query:String(query),groups,comparisons,ethereal};
+  }
+  function editDistance(a,b){
+    if(a===b)return 0;if(!a.length)return b.length;if(!b.length)return a.length;
+    let previous=Array.from({length:b.length+1},(_,i)=>i);
+    for(let i=1;i<=a.length;i++){const current=[i];for(let j=1;j<=b.length;j++)current[j]=Math.min(current[j-1]+1,previous[j]+1,previous[j-1]+(a[i-1]===b[j-1]?0:1));previous=current;}return previous[b.length];
+  }
+  function fuzzyWord(word,haystack,words){
+    if(haystack.includes(word))return true;if(!/^[a-z]+$/.test(word)||word.length<4)return false;
+    const allowance=word.length>=8?2:1;return words.some(candidate=>{if(Math.abs(candidate.length-word.length)>allowance)return false;if(editDistance(word,candidate)<=allowance)return true;if(candidate.length!==word.length)return false;for(let i=0;i<word.length-1;i++)if(word[i]===candidate[i+1]&&word[i+1]===candidate[i]&&word.slice(0,i)===candidate.slice(0,i)&&word.slice(i+2)===candidate.slice(i+2))return true;return false;});
+  }
+  function numericValues(item,field){
+    if(field==='quantity')return[Number(item.quantity||0)];
+    const rolls=normalized(item.rolls),patterns={
+      sockets:[/(\d+(?:\.\d+)?)\s*(?:sockets?|os\b)/g],
+      fcr:[/(\d+(?:\.\d+)?)\s*%?\s*(?:fcr|faster cast rate)/g],
+      resistance:[/(\d+(?:\.\d+)?)\s*%?\s*(?:(?:all|fire|cold|lightning|light|poison)\s+)?(?:resistance|res\b)/g,/(?:(?:all|fire|cold|lightning|light|poison)\s+)?(?:resistance|res)\s*\+?(\d+(?:\.\d+)?)/g],
+      defense:[/(\d+(?:\.\d+)?)\s*(?:defense|def\b)/g],magicfind:[/(\d+(?:\.\d+)?)\s*%?\s*(?:magic find|mf\b)/g]
+    };const values=field==='sockets'&&item.sockets!==undefined?[Number(item.sockets||0)]:[];for(const pattern of patterns[field]||[])for(const match of rolls.matchAll(pattern))values.push(Number(match[1]));return values;
+  }
+  const compare=(actual,operator,wanted)=>operator==='='?actual===wanted:operator==='>'?actual>wanted:operator==='>='?actual>=wanted:operator==='<'?actual<wanted:actual<=wanted;
+  function matchesSearch(item,plan){
+    const haystack=normalized([item.name,item.item,item.originalItem,item.base,item.rolls,item.quality,item.category,itemType(item),item.itemType||'',item.eth?'ethereal':'',item.sockets?item.sockets+'os':'',...characters(item),...(item.locations||[]).map(place=>place.account)].join(' '));
+    const words=haystack.split(/\s+/);if(plan.ethereal!==null&&!!item.eth!==plan.ethereal)return false;
+    if(!plan.comparisons.every(rule=>numericValues(item,rule.field).some(value=>compare(value,rule.operator,rule.value))))return false;
+    return plan.groups.every(group=>group.term==='armor'?itemType(item)==='Body armor':group.alternatives.some((phrase,index)=>phrase.every(word=>group.aliased&&index===0?haystack.includes(word):fuzzyWord(word,haystack,words))));
+  }
   function filter(items,{query='',category='',character='',type='',quality='',selectedOnly=false,selected=new Set()}={}){
-    const terms=query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    return items.filter(item=>(!category||item.category===category)&&(!type||itemType(item)===type)&&(!quality||item.quality===quality)&&(!character||characters(item).includes(character))&&(!selectedOnly||selected.has(key(item)))&&terms.every(term=>[item.name,item.base,item.rolls,item.quality,itemType(item),item.itemType||'',...characters(item),...item.locations.map(p=>p.account)].join(' ').toLowerCase().includes(term)));
+    const plan=searchPlan(query);
+    return items.filter(item=>(!category||item.category===category)&&(!type||itemType(item)===type)&&(!quality||item.quality===quality)&&(!character||characters(item).includes(character))&&(!selectedOnly||selected.has(key(item)))&&matchesSearch(item,plan));
   }
   function reconcile(selected,items){const valid=new Set(items.map(key));return new Set([...selected].filter(id=>valid.has(id)));}
   function muleOptions(data){
@@ -59,14 +110,17 @@ const VaultLogic=(()=>{
     for(const item of chosen){const price=prices[key(item)];if(price){priced++;cents+=Math.round(Number(price.amount)*100)*(price.basis==='lot'?1:item.quantity);}}
     return {priced,unpriced:chosen.length-priced,total:cents/100};
   }
-  function exportPost(data,selected,prices={}){
+  function templateText(text,context={}){return String(text||'').replace(/\{\{(category|listing_count|total_quantity|priced_count)\}\}/g,(_,name)=>String(context[name]??''));}
+  function exportPost(data,selected,prices={},template=null){
     const chosen=data.items.filter(item=>selected.has(key(item)));if(!chosen.length)return '';
     const hasPrices=chosen.some(item=>prices[key(item)]);
-    const header=data.postHeader.replace('Prices coming next — quote the item name and # when choosing a roll.',(hasPrices?'Prices in FG — ':'')+'Quote the item name and # when choosing a roll. Ask for pricing on unpriced items.');
-    const blocks=[header];
+    const pricedCount=chosen.filter(item=>prices[key(item)]).length,context={listing_count:chosen.length,total_quantity:chosen.reduce((sum,item)=>sum+item.quantity,0),priced_count:pricedCount};
+    const pricing=text=>templateText(text,context).replace('Prices coming next — quote the item name and # when choosing a roll.',(hasPrices?'Prices in FG — ':'')+'Quote the item name and # when choosing a roll. Ask for pricing on unpriced items.');
+    const blocks=template?[template.mainHeader?.enabled?pricing(template.mainHeader.text):'',template.mainSubtext?.enabled?pricing(template.mainSubtext.text):''].filter(Boolean):[pricing(data.postHeader)];
     for(const category of new Set(chosen.map(item=>item.category))){
-      const lines=[data.sectionHeaders[category]];let gem='';
-      for(const item of chosen.filter(i=>i.category===category)){
+      const categoryItems=chosen.filter(i=>i.category===category),section=template?.categories?.[category],categoryContext={...context,category,listing_count:categoryItems.length,total_quantity:categoryItems.reduce((sum,item)=>sum+item.quantity,0),priced_count:categoryItems.filter(item=>prices[key(item)]).length};
+      const lines=section?[section.header?.enabled?templateText(section.header.text,categoryContext):'',section.subtext?.enabled?templateText(section.subtext.text,categoryContext):''].filter(Boolean):[data.sectionHeaders[category]];let gem='';
+      for(const item of categoryItems){
         if(category==='Gems'){const next=item.item.split(' ').at(-1);if(next!==gem){lines.push('','[b]'+next+'[/b]');gem=next;}}
         const price=prices[key(item)];
         lines.push(item.postLine+(price?' — [b][color=gold]'+priceLabel(price)+'[/color][/b]':''));
@@ -137,5 +191,38 @@ const VaultLogic=(()=>{
     }
     return{keys,prices:restoredPrices,missing};
   }
-  return{key,itemType,characters,ownershipLabel,locationLabel,isMaterial,isShared,filter,reconcile,muleOptions,inventoryScope,exportPost,priceEntry,priceLabel,pricingSummary,priceSearchURL,colorValue,parseBBCode,formatSelection,syncDraft,tradeList,tradeListCSV,readTradeList,restoreTradeList};
+  const equipmentTypes={
+    helm:['Helms'],weapon:['Swords','Axes','Bows','Crossbows','Claws','Clubs','Maces','Hammers','Daggers','Javelins','Spears','Polearms','Scepters','Staves','Wands','Orbs','Throwing axes','Throwing knives'],
+    shield:['Shields'],armor:['Body armor'],gloves:['Gloves'],belt:['Belts'],boots:['Boots'],amulet:['Amulets'],ring:['Rings'],charm:['Small charms','Large charms','Grand charms','Sunder charms']
+  };
+  const packageTemplates={
+    blizzard:{title:'Blizzard Sorceress',description:'Cold damage, skills and cast speed with familiar magic-find options.',keywords:['cold skills','cold damage','sorceress skills','fcr','magic find'],slots:[
+      ['Helm','helm',['nightwings veil','harlequin crest']],['Weapon','weapon',['deaths fathom','the oculus','oculus','spirit']],['Shield','shield',['spirit','lidless wall']],['Armor','armor',['ormus robes','skin of the vipermagi','chains of honor']],['Gloves','gloves',['magefist','trang ouls claws']],['Belt','belt',['arachnid mesh','snowclash']],['Boots','boots',['war traveler','sandstorm trek']],['Amulet','amulet',['maras kaleidoscope']],['Ring 1','ring',['stone of jordan','bul kathos']],['Ring 2','ring',['stone of jordan','bul kathos']],['Unique charm','charm',['hellfire torch','sorceress','annihilus','gheeds fortune']],['Cold skiller','charm',['cold sorceress','cold skills']]
+    ]},
+    nova:{title:'Nova Sorceress',description:'Lightning damage, cast speed and mana-focused equipment candidates.',keywords:['lightning skills','lightning damage','fcr','mana','energy'],slots:[
+      ['Helm','helm',['griffons eye','harlequin crest']],['Weapon','weapon',['infinity','crescent moon','eschutas temper','the oculus','oculus']],['Shield','shield',['spirit','lidless wall']],['Armor','armor',['skin of the vipermagi','ormus robes','chains of honor']],['Gloves','gloves',['magefist','frostburn','trang ouls claws']],['Belt','belt',['arachnid mesh']],['Boots','boots',['silkweave','sandstorm trek']],['Amulet','amulet',['maras kaleidoscope']],['Ring 1','ring',['stone of jordan']],['Ring 2','ring',['stone of jordan']],['Unique charm','charm',['hellfire torch','sorceress','annihilus']],['Lightning skiller','charm',['lightning sorceress','lightning skills']]
+    ]},
+    hammerdin:{title:'Hammerdin',description:'Paladin skills, cast speed and the standard teleporting hammer setup.',keywords:['paladin skills','combat skills','fcr','all res'],slots:[
+      ['Helm','helm',['harlequin crest','crown of ages']],['Weapon','weapon',['heart of the oak','wizardspike','spirit']],['Shield','shield',['herald of zakarum','spirit']],['Armor','armor',['enigma','skin of the vipermagi','chains of honor']],['Gloves','gloves',['magefist','trang ouls claws']],['Belt','belt',['arachnid mesh','verdungos']],['Boots','boots',['war traveler','sandstorm trek']],['Amulet','amulet',['maras kaleidoscope']],['Ring 1','ring',['stone of jordan','bul kathos']],['Ring 2','ring',['stone of jordan','bul kathos']],['Unique charm','charm',['hellfire torch','paladin','annihilus']],['Combat skiller','charm',['combat paladin','paladin combat','pally combat']]
+    ]}
+  };
+  function packageTemplateList(){return Object.entries(packageTemplates).map(([id,value])=>({id,title:value.title,description:value.description}));}
+  function packageKind(item){for(const [kind,types] of Object.entries(equipmentTypes))if(types.includes(itemType(item)))return kind;return null;}
+  function packageBuild(items,templateOrId){
+    const template=typeof templateOrId==='string'?packageTemplates[templateOrId]:templateOrId;if(!template||!Array.isArray(template.slots))throw new Error('Unknown character package.');const used=new Set(),slots=[];
+    for(const definition of template.slots){
+      const [label,kind,wants,slotId]=Array.isArray(definition)?[...definition,undefined]:[definition.label,definition.kind,definition.wants,definition.id];if(!label||!equipmentTypes[kind]||!Array.isArray(wants))continue;
+      const types=equipmentTypes[kind];const candidates=items.filter(item=>types.includes(itemType(item))).map(item=>{
+        const text=normalized([item.name,item.item,item.base,item.rolls,item.quality].join(' '));let score=0,reason='Matches '+label.toLowerCase()+' slot';
+        const preferred=[];wants.forEach((want,index)=>{if(text.includes(normalized(want))){score+=120-index*8;preferred.push(want);}});if(preferred.length)reason='Preferred: '+preferred.join(' + ');
+        for(const keyword of template.keywords||[])if(text.includes(normalized(keyword)))score+=6;
+        if(item.quality==='Runeword'||item.quality==='Unique'||item.quality==='Set')score+=3;
+        return{item,score,reason};
+      }).filter(candidate=>template.custom?candidate.score>=100:label.includes('skiller')?candidate.score>=100:label==='Unique charm'?candidate.item.quality==='Unique'&&candidate.score>=100:true).sort((a,b)=>b.score-a.score||a.item.name.localeCompare(b.item.name));
+      const available=candidates.find(candidate=>!used.has(key(candidate.item)))||candidates[0]||null;if(available)used.add(key(available.item));
+      slots.push({id:slotId||label,label,kind,candidates:candidates.slice(0,15),selectedKey:available?key(available.item):null});
+    }
+    return{id:typeof templateOrId==='string'?templateOrId:template.id,title:template.title,description:template.description,slots};
+  }
+  return{key,itemType,characters,ownershipLabel,locationLabel,isMaterial,isShared,filter,searchPlan,reconcile,muleOptions,inventoryScope,exportPost,priceEntry,priceLabel,pricingSummary,priceSearchURL,colorValue,parseBBCode,formatSelection,syncDraft,tradeList,tradeListCSV,readTradeList,restoreTradeList,packageTemplateList,packageKind,packageBuild};
 })();

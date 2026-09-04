@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Download D2R Treasure Vault v0.3
-    url: https://github.com/DaddyDeesel/D2R-Vault/releases/tag/v0.3
+  - name: Download D2R Treasure Vault v0.3.1
+    url: https://github.com/DaddyDeesel/D2R-Vault/releases/tag/v0.3.1
     about: Download the tested Windows ZIP under Release Assets.

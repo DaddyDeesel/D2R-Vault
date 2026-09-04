@@ -1,12 +1,16 @@
 'use strict';
 (()=>{
   const el=id=>document.getElementById(id);
-  const ui=Object.fromEntries(['connection-state','last-checked','refresh','collections','source-time','collection-title','result-count','search','character','category','select-matching','clear-selection','selected-only','selection-count','export','notice','export-panel','close-export','post-text','copy-post','download-post','export-status','item-detail','items','page-status','previous','next','format-bold','format-italic','format-underline','format-color','apply-color','rebuild-post','restore-draft','draft-warning','draft-warning-text','accept-draft','post-preview','composer-help','set-prices','price-summary','pricing-panel','close-pricing','bulk-price-editor','mule-summary','mule-list','all-mules','clear-mules','settings','settings-panel','close-settings','settings-form','database-path','browse-database','save-settings','settings-status','quantity-breakdown','changes-summary','changes-status','clear-changes','changes-list','changes-totals','changes-filters','log-include-inventory','log-settings-status','changes-scope','open-log','close-log','changes-panel','log-collection-list','log-all-collections','log-no-collections','item-type','item-quality','clear-refinements','refinement-heading','saved-search-count','save-search-form','saved-search-name','saved-search-list','saved-search-status','price-filter','download-trade-json','download-trade-csv','import-trade-list','trade-list-file','trade-list-status'].map(id=>[id,el(id)]));
+  const ui=Object.fromEntries(['connection-state','last-checked','refresh','collections','source-time','collection-title','result-count','search','character','category','select-matching','clear-selection','selected-only','selection-count','export','notice','export-panel','close-export','post-text','copy-post','download-post','export-status','item-detail','items','page-status','previous','next','format-bold','format-italic','format-underline','format-color','apply-color','rebuild-post','restore-draft','draft-warning','draft-warning-text','accept-draft','post-preview','composer-help','set-prices','price-summary','pricing-panel','close-pricing','bulk-price-editor','mule-summary','mule-list','all-mules','clear-mules','settings','settings-panel','close-settings','settings-form','database-path','browse-database','save-settings','settings-status','quantity-breakdown','changes-summary','changes-status','clear-changes','changes-list','changes-totals','changes-filters','log-include-inventory','log-settings-status','changes-scope','open-log','close-log','changes-panel','log-collection-list','log-all-collections','log-no-collections','item-type','item-quality','clear-refinements','refinement-heading','saved-search-count','save-search-form','saved-search-name','saved-search-list','saved-search-status','price-filter','download-trade-json','download-trade-csv','import-trade-list','trade-list-file','trade-list-status','open-package-builder','close-package-builder','package-panel','package-template','analyze-package','package-description','package-slots','package-status','copy-package','select-package','create-package-template','delete-package-template','new-package-form','new-package-name','new-package-description','cancel-package-template','custom-package-actions','add-selected-to-package','expand-template-options','collapse-template-options','post-main-header-enabled','post-main-header-fields','post-main-header','post-main-header-insert','post-main-header-preview','post-main-subtext-enabled','post-main-subtext-fields','post-main-subtext','post-main-subtext-insert','post-main-subtext-preview','post-category-templates','new-template-category','add-template-category','post-template-status'].map(id=>[id,el(id)]));
   let data={items:[],images:{},sectionHeaders:{},postHeader:''};let selected=new Set();let category='';let page=0;const pageSize=16;let busy=false;let downloadURL='';let detailKey=null;let knownVersion=null;let hasCurrentConnection=false;let connectionProblem=false;
   let draftStorage='d2r-treasure-vault-draft-v1';let draft=null;let backupDraft=null;let previewText=null;let downloadText=null;let savedState='';
   let priceStorage='d2r-treasure-vault-prices-v1';const prices=Object.create(null);
   let muleStorage='d2r-treasure-vault-mules-v1';let mules=new Set();let rawData=null;
   let savedSearchStorage='d2r-treasure-vault-saved-searches-v1';let savedSearches=[];let tradeListStatus='';
+  let packageBuild=null;const packageTemplateStorage='d2r-treasure-vault-custom-package-templates-v1';let customPackageTemplates=[];
+  try{const saved=JSON.parse(localStorage.getItem(packageTemplateStorage)||'[]');if(Array.isArray(saved))customPackageTemplates=saved.filter(template=>template&&typeof template.id==='string'&&typeof template.title==='string'&&Array.isArray(template.slots)).slice(0,30);}catch{}
+  const postTemplateStorage='d2r-treasure-vault-jsp-post-template-v1';let postTemplate=null;
+  try{const saved=JSON.parse(localStorage.getItem(postTemplateStorage)||'null');if(saved&&saved.version===1&&saved.mainHeader&&saved.mainSubtext&&saved.categories)postTemplate=saved;}catch{}
   let activeSource=null;let switchingDatabase=false;let setupPrompted=false;
   function useSource(incoming){
     if(!incoming.sourceId||incoming.sourceId===activeSource)return;
@@ -15,7 +19,7 @@
     const keys=baseKeys.map(key=>key+':'+activeSource);
     try{if(activeSource===incoming.legacySourceId)for(let i=0;i<keys.length;i++){if(localStorage.getItem(keys[i])===null){const prior=localStorage.getItem(baseKeys[i]);if(prior!==null)localStorage.setItem(keys[i],prior);}}}catch{}
     [draftStorage,priceStorage,muleStorage,savedSearchStorage]=keys;
-    draft=null;backupDraft=null;savedState='';previewText=null;downloadText=null;selected=new Set();mules=new Set();savedSearches=[];tradeListStatus='';
+    draft=null;backupDraft=null;savedState='';previewText=null;downloadText=null;selected=new Set();mules=new Set();savedSearches=[];tradeListStatus='';packageBuild=null;
     for(const key of Object.keys(prices))delete prices[key];
   try{const saved=JSON.parse(localStorage.getItem(muleStorage)||'[]');if(Array.isArray(saved))mules=new Set(saved.filter(id=>typeof id==='string'));}catch{}
   try{const saved=JSON.parse(localStorage.getItem(priceStorage)||'{}');for(const [id,price] of Object.entries(saved)){try{prices[id]=VaultLogic.priceEntry(price.amount,price.basis);}catch{}}}catch{}
@@ -189,19 +193,41 @@
     const state=JSON.stringify({...draft,selected:[...selected],backup:backupDraft});if(state===savedState)return;
     try{localStorage.setItem(draftStorage,state);savedState=state;}catch{ui['composer-help'].textContent='Highlight text, then apply formatting. Browser storage is unavailable; copy your draft before closing.';}
   }
-  function renderPreview(text){
-    if(text===previewText)return;previewText=text;
+  function bbElement(text){
     const build=node=>{
       if(typeof node==='string')return document.createTextNode(node);
       const tag={root:'div',b:'strong',i:'em',u:'u',center:'div',color:'span'}[node.tag];const element=document.createElement(tag);
       if(node.tag==='center')element.className='bb-center';if(node.tag==='color')element.style.color=node.color;
       for(const child of node.children)element.append(build(child));return element;
     };
-    ui['post-preview'].replaceChildren(build(VaultLogic.parseBBCode(text)));
+    return build(VaultLogic.parseBBCode(text));
+  }
+  function renderPreview(text){
+    if(text===previewText)return;previewText=text;ui['post-preview'].replaceChildren(bbElement(text));
+  }
+  const templateInserts=[['','Choose text…'],['[b][color=gold]◆ TITLE ◆[/color][/b]','Gold title'],['[b][color=orange]━━ {{category}} ━━[/color][/b]','Orange category divider'],['[i]Browse the stash. Find your next upgrade.[/i]','Browse the stash'],['Quote the item name and # when choosing a roll. Ask for pricing on unpriced items.','Trade instructions'],['{{category}}','Category name'],['{{listing_count}}','Listing count'],['{{total_quantity}}','Total quantity'],['{{priced_count}}','Priced listing count']];
+  function defaultCategoryTemplate(name){const lines=String(data.sectionHeaders[name]||('[b][color=teal]━━ '+name.toUpperCase()+' ━━[/color][/b]\n[i]Browse the stash. Find your next upgrade.[/i]')).split('\n');return{header:{enabled:true,text:lines.shift()||''},subtext:{enabled:true,text:lines.join('\n')}};}
+  function ensurePostTemplate(){
+    if(!postTemplate)postTemplate={version:1,mainHeader:{enabled:false,text:'[center][b][color=gold]◆ THE STASH TREASURE TROVE ◆[/color][/b][/center]'},mainSubtext:{enabled:true,text:'[center][b]Softcore Ladder RotW • PC • Americas[/b]\nRunes • Gems • Runewords • Uniques • Sets • Charms\nQuote the item name and # when choosing a roll. Ask for pricing on unpriced items.[/center]'},categories:{}};
+    for(const name of Object.keys(data.sectionHeaders||{}))if(!postTemplate.categories[name])postTemplate.categories[name]=defaultCategoryTemplate(name);
+    for(const [name,section] of Object.entries(postTemplate.categories)){const fallback=defaultCategoryTemplate(name);if(!section.header)section.header=fallback.header;if(!section.subtext)section.subtext=fallback.subtext;}
+  }
+  function savePostTemplate(message='Post template saved.'){
+    let saved=true;try{localStorage.setItem(postTemplateStorage,JSON.stringify(postTemplate));}catch{saved=false;}ui['post-template-status'].textContent=message+(saved?'':' Browser storage is unavailable; these changes last only while the page stays open.');if(draft||!ui['export-panel'].hidden)exportText();
+  }
+  function fillInsertSelect(select){select.replaceChildren();for(const [value,label] of templateInserts){const option=make('option',label);option.value=value;select.append(option);}}
+  function insertTemplateText(textarea,select){if(!select.value)return;const start=textarea.selectionStart??textarea.value.length,end=textarea.selectionEnd??start;textarea.value=textarea.value.slice(0,start)+select.value+textarea.value.slice(end);textarea.dispatchEvent(new Event('input'));textarea.focus();textarea.setSelectionRange(start+select.value.length,start+select.value.length);select.value='';}
+  function templateField(title,config){
+    const section=make('section',undefined,'category-template-field'),enable=make('label',undefined,'template-enable'),checkbox=make('input');checkbox.type='checkbox';checkbox.checked=!!config.enabled;enable.append(checkbox,make('span','Include '+title.toLowerCase()));const fields=make('div');fields.hidden=!checkbox.checked;const label=make('label',title+' BBCode'),textarea=make('textarea');textarea.rows=title==='Header'?2:3;textarea.spellcheck=false;textarea.value=config.text||'';label.append(textarea);const insert=make('div',undefined,'template-insert-row'),insertLabel=make('label','Quick add'),select=make('select');fillInsertSelect(select);insertLabel.append(select);const button=make('button','Insert','button');button.type='button';button.onclick=()=>insertTemplateText(textarea,select);insert.append(insertLabel,button);const preview=make('div',undefined,'template-preview');const update=()=>{config.text=textarea.value;preview.replaceChildren(bbElement(config.text));savePostTemplate();};textarea.oninput=update;checkbox.onchange=()=>{config.enabled=checkbox.checked;fields.hidden=!checkbox.checked;savePostTemplate();};preview.replaceChildren(bbElement(config.text));fields.append(label,insert,preview);section.append(enable,fields);return section;
+  }
+  function renderPostTemplateEditor(){
+    ensurePostTemplate();ui['post-main-header-enabled'].checked=!!postTemplate.mainHeader.enabled;ui['post-main-header-fields'].hidden=!postTemplate.mainHeader.enabled;ui['post-main-header'].value=postTemplate.mainHeader.text;fillInsertSelect(ui['post-main-header-insert']);ui['post-main-header-preview'].replaceChildren(bbElement(postTemplate.mainHeader.text));
+    ui['post-main-subtext-enabled'].checked=!!postTemplate.mainSubtext.enabled;ui['post-main-subtext-fields'].hidden=!postTemplate.mainSubtext.enabled;ui['post-main-subtext'].value=postTemplate.mainSubtext.text;fillInsertSelect(ui['post-main-subtext-insert']);ui['post-main-subtext-preview'].replaceChildren(bbElement(postTemplate.mainSubtext.text));
+    ui['post-category-templates'].replaceChildren();for(const name of Object.keys(postTemplate.categories).sort((a,b)=>a.localeCompare(b))){const details=make('details',undefined,'template-option category-template');details.dataset.templateOption='';const summary=make('summary');summary.append(document.createTextNode(name+' '),make('span','Header and subtitle'));details.append(summary);const body=make('div',undefined,'template-option-body');body.append(templateField('Header',postTemplate.categories[name].header),templateField('Subtitle',postTemplate.categories[name].subtext));if(!Object.prototype.hasOwnProperty.call(data.sectionHeaders||{},name)){const remove=make('button','Remove custom category','button quiet package-remove');remove.type='button';remove.onclick=()=>{delete postTemplate.categories[name];savePostTemplate('Removed “'+name+'”.');renderPostTemplateEditor();};body.append(remove);}details.append(body);ui['post-category-templates'].append(details);}
   }
   function exportText(){
     if(knownVersion===null)return;
-    draft=VaultLogic.syncDraft(draft,VaultLogic.exportPost(data,selected,prices));
+    ensurePostTemplate();draft=VaultLogic.syncDraft(draft,VaultLogic.exportPost(data,selected,prices,postTemplate));
     const text=draft.text;
     if(ui['post-text'].value!==text)ui['post-text'].value=text;
     renderPreview(text);
@@ -225,7 +251,40 @@
     const cards=make('div',undefined,'locator-cards');for(const place of item.locations)cards.append(locatorCard(item,place));panel.append(cards);
     if(data.items.some(i=>VaultLogic.key(i)===VaultLogic.key(item)))panel.append(make('h4','Asking price'),priceEditor(()=>[VaultLogic.key(item)],prices[VaultLogic.key(item)]));
     else panel.append(make('p','This item is outside your selected mule scope. Include its character in Settings → Select Mules to list it for sale.','composer-hint'));
+    const custom=activeCustomPackage();if(custom&&VaultLogic.packageKind(item)){const add=make('button','Add to “'+custom.title+'”','button');add.type='button';add.onclick=()=>addItemsToCustomPackage([item]);panel.append(add);}
 
+  }
+  function packageChoice(slot){return slot.candidates.find(candidate=>VaultLogic.key(candidate.item)===slot.selectedKey)?.item||null;}
+  const packageKindLabels={helm:'Helm',weapon:'Weapon',shield:'Shield',armor:'Armor',gloves:'Gloves',belt:'Belt',boots:'Boots',amulet:'Amulet',ring:'Ring',charm:'Charm'};
+  const activeCustomPackage=()=>customPackageTemplates.find(template=>template.id===ui['package-template'].value)||null;
+  function persistPackageTemplates(){try{localStorage.setItem(packageTemplateStorage,JSON.stringify(customPackageTemplates));return true;}catch{return false;}}
+  function packageTemplateOptions(preferred=ui['package-template'].value){
+    ui['package-template'].replaceChildren();const standard=make('optgroup');standard.label='Starter templates';for(const template of VaultLogic.packageTemplateList()){const option=make('option',template.title);option.value=template.id;standard.append(option);}ui['package-template'].append(standard);
+    if(customPackageTemplates.length){const custom=make('optgroup');custom.label='My templates';for(const template of customPackageTemplates){const option=make('option',template.title);option.value=template.id;custom.append(option);}ui['package-template'].append(custom);}
+    if([...ui['package-template'].options].some(option=>option.value===preferred))ui['package-template'].value=preferred;
+  }
+  function addItemsToCustomPackage(items){
+    const template=activeCustomPackage();if(!template){ui['package-status'].textContent='Choose or create one of your templates before adding items.';return;}
+    let added=0,unsupported=0,alreadyAdded=0;for(const item of items){const kind=VaultLogic.packageKind(item);if(!kind){unsupported++;continue;}const sourceKey=VaultLogic.key(item);if(template.slots.some(slot=>slot.sourceKey===sourceKey)){alreadyAdded++;continue;}const wanted=String(item.item||item.name).replace(/ #\d+$/,'').trim();template.slots.push({id:'slot-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),sourceKey,label:packageKindLabels[kind]+' — '+wanted,kind,wants:[wanted]});added++;}
+    const saved=persistPackageTemplates();renderPackage(template.id);ui['package-status'].textContent=added+' item'+(added===1?'':'s')+' added to “'+template.title+'”.'+(unsupported?' '+unsupported+' unsupported material or item type'+(unsupported===1?' was':'s were')+' skipped.':'')+(alreadyAdded?' '+alreadyAdded+' already-added selection'+(alreadyAdded===1?' was':'s were')+' skipped.':'')+(saved?'':' Browser storage is unavailable; this change lasts only while the page stays open.');
+  }
+  function packageChecklist(){
+    if(!packageBuild)return'';const lines=[packageBuild.title.toUpperCase()+' · RETRIEVAL CHECKLIST',''];
+    for(const slot of packageBuild.slots){const item=packageChoice(slot);lines.push(slot.label+' — '+(item?item.name:'No item selected'));if(item)for(const place of item.locations)lines.push('  '+VaultLogic.locationLabel(item,place));}
+    return lines.join('\n');
+  }
+  function renderPackage(templateId=ui['package-template'].value){
+    if(!rawData){ui['package-status'].textContent='Connect an items.db before scanning for a package.';return;}
+    const custom=customPackageTemplates.find(template=>template.id===templateId);packageBuild=VaultLogic.packageBuild(data.items,custom?{...custom,custom:true}:templateId);ui['package-description'].textContent=(packageBuild.description||'Your custom equipment list.')+' Scanned '+data.items.length.toLocaleString()+' listings from shared stashes and the mules currently selected in Settings.';ui['package-slots'].replaceChildren();ui['custom-package-actions'].hidden=!custom;ui['delete-package-template'].hidden=!custom;
+    let filled=0;
+    for(const slot of packageBuild.slots){
+      const card=make('article',undefined,'package-slot');const heading=make('div',undefined,'package-slot-heading');heading.append(make('h4',slot.label));const actions=make('span',undefined,'package-slot-actions'),locateButton=make('button','Locate','button quiet');locateButton.type='button';actions.append(locateButton);if(custom){const remove=make('button','Remove','button quiet package-remove');remove.type='button';remove.onclick=()=>{custom.slots=custom.slots.filter(saved=>saved.id!==slot.id);persistPackageTemplates();renderPackage(custom.id);ui['package-status'].textContent='Removed an entry from “'+custom.title+'”.';};actions.append(remove);}heading.append(actions);card.append(heading);
+      const select=make('select');select.setAttribute('aria-label',slot.label+' candidate');const blank=make('option',slot.candidates.length?'Skip this slot':'No matching item found');blank.value='';select.append(blank);
+      for(const candidate of slot.candidates){const item=candidate.item,owner=VaultLogic.ownershipLabel(item);const option=make('option',item.name+(owner?' · '+owner:'')+(candidate.score>=100?' · preferred':''));option.value=VaultLogic.key(item);option.title=candidate.reason;select.append(option);}
+      select.value=slot.selectedKey||'';if(slot.selectedKey)filled++;select.disabled=!slot.candidates.length;locateButton.disabled=!slot.selectedKey;
+      const detail=make('p',undefined,'composer-hint');const update=()=>{slot.selectedKey=select.value||null;const chosen=packageChoice(slot);locateButton.disabled=!chosen;detail.textContent=chosen?[chosen.base,chosen.rolls,VaultLogic.ownershipLabel(chosen)].filter(Boolean).join(' · '):'Leave this slot open.';ui['copy-package'].disabled=!packageBuild.slots.some(packageChoice);ui['select-package'].disabled=!packageBuild.slots.some(packageChoice);};select.onchange=update;locateButton.onclick=()=>{const chosen=packageChoice(slot);if(chosen){locate(chosen);ui['item-detail'].scrollIntoView({block:'nearest',behavior:'smooth'});}};card.append(select,detail);update();ui['package-slots'].append(card);
+    }
+    ui['copy-package'].disabled=!packageBuild.slots.some(packageChoice);ui['select-package'].disabled=!packageBuild.slots.some(packageChoice);ui['package-status'].textContent=packageBuild.slots.length?filled+' of '+packageBuild.slots.length+' slots filled with the highest-ranked available candidates.':custom?'This template is empty. Select equipment in the vault and choose “Add selected vault items.”':'No package slots are available.';
   }
   function render(){
     refinementControls();
@@ -260,7 +319,7 @@
         const result=await fetch('/api/inventory',{cache:'no-store'});if(!result.ok)throw new Error('Inventory unavailable');const incoming=await result.json();
         useSource(incoming);rawData=incoming;trackInventory(incoming);const scoped=VaultLogic.inventoryScope(incoming,mules);
         const previousCount=selected.size;selected=VaultLogic.reconcile(selected,scoped.items);const removed=previousCount-selected.size;const updating=knownVersion!==null;
-        data=scoped;knownVersion=incoming.version;collectionControls();muleControls();render();
+        data=scoped;knownVersion=incoming.version;ensurePostTemplate();collectionControls();muleControls();render();if(!ui['package-panel'].hidden)renderPackage();if(!ui['settings-panel'].hidden)renderPostTemplateEditor();
         if(detailKey){const item=data.items.find(i=>VaultLogic.key(i)===detailKey);if(item)locate(item);else{ui['item-detail'].hidden=true;detailKey=null;}}
         if(!status.error)notify(updating?'Stash updated at '+time(incoming.updatedAt)+'.'+(removed?' '+removed+' unavailable selection'+(removed===1?' was':'s were')+' removed.':' Your remaining selections were kept.'):'');
         ui['source-time'].textContent=incoming.sourceCaptured?'Latest capture: '+new Date(incoming.sourceCaptured).toLocaleString():'';
@@ -270,6 +329,15 @@
       hasCurrentConnection=false;connectionProblem=true;ui['connection-state'].textContent='Reader not connected';ui['connection-state'].dataset.state='error';ui.refresh.disabled=false;notify('The local stash reader is unavailable. Reopen D2R Treasure Vault to reconnect. Your last inventory and selections remain visible.');selectionStatus();
     }finally{busy=false;}
   }
+  packageTemplateOptions('blizzard');
+  ui['open-package-builder'].onclick=()=>{ui['package-panel'].hidden=false;renderPackage();ui['package-panel'].scrollIntoView({block:'nearest',behavior:'smooth'});};
+  ui['close-package-builder'].onclick=()=>{ui['package-panel'].hidden=true;};ui['analyze-package'].onclick=()=>renderPackage();ui['package-template'].onchange=()=>renderPackage();
+  ui['create-package-template'].onclick=()=>{ui['new-package-form'].hidden=false;ui['new-package-name'].focus();};ui['cancel-package-template'].onclick=()=>{ui['new-package-form'].hidden=true;ui['new-package-form'].reset();};
+  ui['new-package-form'].onsubmit=event=>{event.preventDefault();const title=ui['new-package-name'].value.trim(),description=ui['new-package-description'].value.trim();if(!title)return;if(customPackageTemplates.length>=30){ui['package-status'].textContent='You can save up to 30 custom templates. Delete one before creating another.';return;}const template={id:'custom-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),title,description:description||'A custom equipment package built from your vault.',custom:true,keywords:[],slots:[]};customPackageTemplates.push(template);const saved=persistPackageTemplates();packageTemplateOptions(template.id);ui['new-package-form'].hidden=true;ui['new-package-form'].reset();renderPackage(template.id);ui['package-status'].textContent='Created “'+title+'”. Select gear in the vault, then add those items to this template.'+(saved?'':' Browser storage is unavailable; this template lasts only while the page stays open.');};
+  ui['delete-package-template'].onclick=()=>{const template=activeCustomPackage();if(!template)return;customPackageTemplates=customPackageTemplates.filter(saved=>saved.id!==template.id);persistPackageTemplates();packageTemplateOptions('blizzard');renderPackage('blizzard');ui['package-status'].textContent='Deleted “'+template.title+'”.';};
+  ui['add-selected-to-package'].onclick=()=>{const chosen=data.items.filter(item=>selected.has(VaultLogic.key(item)));if(!chosen.length){ui['package-status'].textContent='Select one or more equipment listings in the treasure table first.';return;}addItemsToCustomPackage(chosen);};
+  ui['copy-package'].onclick=async()=>{const checklist=packageChecklist();try{await navigator.clipboard.writeText(checklist);ui['package-status'].textContent='Retrieval checklist copied.';}catch{ui['package-status'].textContent='Clipboard access is unavailable. Try again after interacting with the page.';}};
+  ui['select-package'].onclick=()=>{if(!packageBuild)return;const chosen=packageBuild.slots.map(packageChoice).filter(Boolean);let added=0;const available=new Set(data.items.map(VaultLogic.key));for(const item of chosen){const id=VaultLogic.key(item);if(available.has(id)){selected.add(id);added++;}}ui['selected-only'].checked=false;render();ui['package-status'].textContent='Added '+added+' package listing'+(added===1?'':'s')+' from the current mule scope.';notify('Character package added from shared stashes and your selected mules.');};
   ui.search.addEventListener('input',()=>{page=0;render();});ui.character.addEventListener('change',()=>{page=0;render();});ui.category.addEventListener('change',()=>{category=ui.category.value;ui['item-type'].value='';ui['item-quality'].value='';page=0;collectionControls();render();});ui['selected-only'].onchange=()=>{page=0;render();};
   ui.previous.onclick=()=>{page--;render();};ui.next.onclick=()=>{page++;render();};ui['select-matching'].onclick=()=>{for(const item of filtered())selected.add(VaultLogic.key(item));render();};ui['clear-selection'].onclick=()=>{selected.clear();render();};
   ui.export.onclick=()=>{ui['export-panel'].hidden=false;exportText();};ui['close-export'].onclick=()=>{ui['export-panel'].hidden=true;};
@@ -282,7 +350,7 @@
   ui['post-text'].addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&!event.altKey&&['b','i','u'].includes(event.key.toLowerCase())){event.preventDefault();applyFormat(event.key.toLowerCase());}});
   ui['rebuild-post'].onclick=()=>{backupDraft=draft?{...draft}:null;draft=null;exportText();};
   ui['restore-draft'].onclick=()=>{if(!backupDraft)return;const previous={...backupDraft};backupDraft=draft?{...draft}:null;draft=previous;exportText();};
-  ui['accept-draft'].onclick=()=>{draft={...draft,base:VaultLogic.exportPost(data,selected,prices),stale:false};draft.dirty=draft.text!==draft.base;exportText();};
+  ui['accept-draft'].onclick=()=>{draft={...draft,base:VaultLogic.exportPost(data,selected,prices,postTemplate),stale:false};draft.dirty=draft.text!==draft.base;exportText();};
   ui['set-prices'].onclick=()=>{ui['pricing-panel'].hidden=false;ui['bulk-price-editor'].replaceChildren(priceEditor(()=>selected));};ui['close-pricing'].onclick=()=>{ui['pricing-panel'].hidden=true;};
   ui['all-mules'].onclick=()=>{mules=new Set(VaultLogic.muleOptions(rawData).filter(c=>c.personalCount+c.inventoryCount).map(c=>c.key));changeScope();};ui['clear-mules'].onclick=()=>{mules.clear();changeScope();};
   ui['copy-post'].onclick=async()=>{try{await navigator.clipboard.writeText(ui['post-text'].value);ui['export-status'].textContent='Post copied. Ready for d2jsp.';}catch{ui['post-text'].focus();ui['post-text'].select();ui['export-status'].textContent='Text selected. Press Ctrl+C (Cmd+C on Mac) to copy.';}};
@@ -298,9 +366,14 @@
   ui['trade-list-file'].onchange=async()=>{const file=ui['trade-list-file'].files?.[0];ui['trade-list-file'].value='';if(!file)return;if(file.size>5*1024*1024){tradeListStatus='That file is larger than the 5 MB import limit.';tradeListControls();return;}try{const imported=VaultLogic.readTradeList(await file.text(),file.name),restored=VaultLogic.restoreTradeList(imported,data.items);if(!restored.keys.length)throw new Error('None of the backed-up items are available in the current sale scope. Check Select Mules and try again.');selected=new Set(restored.keys);for(const id of restored.keys)delete prices[id];Object.assign(prices,restored.prices);let saved=true;try{localStorage.setItem(priceStorage,JSON.stringify(prices));}catch{saved=false;}ui['selected-only'].checked=false;page=0;const missing=restored.missing.length;tradeListStatus='Restored '+restored.keys.length+' listing'+(restored.keys.length===1?'':'s')+' and '+Object.keys(restored.prices).length+' price'+(Object.keys(restored.prices).length===1?'':'s')+'.'+(missing?' '+missing+' unavailable item'+(missing===1?' was':'s were')+' skipped.':'')+(saved?'':' Browser storage is unavailable; restored prices last only while this page stays open.');notify(tradeListStatus);render();}catch(error){tradeListStatus=error.message||'Could not import this trade-list backup.';tradeListControls();}};
   ui['log-all-collections'].onclick=()=>{excludedLogCollections=[];saveLogCollections();};
   ui['log-no-collections'].onclick=()=>{excludedLogCollections=availableLogCollections();saveLogCollections();};
+  function updateMainTemplate(kind){const config=postTemplate[kind],prefix=kind==='mainHeader'?'post-main-header':'post-main-subtext';config.enabled=ui[prefix+'-enabled'].checked;config.text=ui[prefix].value;ui[prefix+'-fields'].hidden=!config.enabled;ui[prefix+'-preview'].replaceChildren(bbElement(config.text));savePostTemplate();}
+  ui['post-main-header-enabled'].onchange=()=>updateMainTemplate('mainHeader');ui['post-main-header'].oninput=()=>updateMainTemplate('mainHeader');ui['post-main-subtext-enabled'].onchange=()=>updateMainTemplate('mainSubtext');ui['post-main-subtext'].oninput=()=>updateMainTemplate('mainSubtext');
+  for(const button of document.querySelectorAll('[data-template-insert]'))button.onclick=()=>insertTemplateText(ui[button.dataset.templateInsert],ui[button.dataset.templateInsert+'-insert']);
+  ui['expand-template-options'].onclick=()=>document.querySelectorAll('[data-template-option]').forEach(details=>details.open=true);ui['collapse-template-options'].onclick=()=>document.querySelectorAll('[data-template-option]').forEach(details=>details.open=false);
+  ui['add-template-category'].onclick=()=>{ensurePostTemplate();const name=ui['new-template-category'].value.trim();if(!name)return;const existing=Object.keys(postTemplate.categories).find(saved=>saved.toLowerCase()===name.toLowerCase());if(existing){ui['post-template-status'].textContent='“'+existing+'” already has a template section.';return;}postTemplate.categories[name]=defaultCategoryTemplate(name);ui['new-template-category'].value='';savePostTemplate('Added the “'+name+'” category template.');renderPostTemplateEditor();};
   ui.settings.onclick=async()=>{
     showLog(false);
-    ui['settings-panel'].hidden=false;ui['settings-status'].textContent='Loading database settings…';
+    ui['settings-panel'].hidden=false;renderPostTemplateEditor();ui['settings-status'].textContent='Loading database settings…';
     try{const response=await fetch('/api/settings',{cache:'no-store'});if(!response.ok)throw new Error();const settings=await response.json();ui['database-path'].value=settings.needsSetup?'':settings.databasePath;ui['settings-status'].textContent=settings.needsSetup?'Choose the items.db created by D2R Manager.':'Current database: '+settings.databasePath;}catch{ui['settings-status'].textContent='Could not load settings. Reopen D2R Treasure Vault to reconnect.';}
   };
   ui['close-settings'].onclick=()=>{ui['settings-panel'].hidden=true;};

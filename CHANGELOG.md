@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.3.1 — 2026-09-04
+
+D2R Treasure Vault v0.3.1 expands search and sale-post customization while making account and mule boundaries explicit.
+
+### Added
+
+- Fuzzy D2R shorthand and structured stat searches, including `hoz`, `hoto`, `pcomb`, `35 spirit`, `3os armor`, `FCR >= 10`, socket comparisons, resistance comparisons, and ethereal filters.
+- Blizzard Sorceress, Nova Sorceress, and Hammerdin package builders with custom saved build templates, ranked alternatives, item locations, retrieval checklists, and sale-selection support.
+- Conservative unidentified unique inference. An unidentified item receives a unique name only when its base has one valid unique definition, and the visible name retains `(Unid)`.
+- Persistent JSP Post Template Editor for main headings, main subtext, category headings, subtitles, BBCode previews, quick inserts, identifiers, and custom categories.
+- Sanitized inventory, package-builder, and JSP-template screenshots in the project README.
+
+### Changed
+
+- Package searches use account shared stashes and only the personal stashes and carried inventories enabled under **Select Mules**.
+- Shared locations are labeled by account, shared page, or account material section without attributing account-wide stock to a character.
+- The organizer selects one deterministic latest shared snapshot per account. Equal-timestamp observations from another character are audit records and never additional sale quantity.
+
+### Fixed
+
+- Restored the **Add selected vault items** handler after adding the JSP template controls.
+- Prevented the `arach` alias from fuzzily matching unrelated items such as Godstrike Arch.
+- Prevented the Eth rune from matching the `ethereal` item filter.
+
+### Validation
+
+- Browser checks cover mule-scoped package counts, shared locator labels, unidentified Arachnid Mesh search, custom post headings, and browser persistence.
+- A synthetic duplicate-snapshot test added 214 equal-timestamp shared rows under a second character; output remained 715 listings and 7,663 units.
+
 ## v0.3 — 2026-09-02
 
 D2R Treasure Vault v0.3 adds portable trade-list backups and reusable smart searches without crowding the main inventory view.

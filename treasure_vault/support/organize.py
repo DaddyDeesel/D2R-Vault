@@ -23,10 +23,11 @@ skill_names = {int(r['*Id']): r['skill'] for r in csv.DictReader((SUPPORT / 'cur
 accounts = {a: f'Account {i+1}' for i, a in enumerate(sorted(set(r['account_id'] for r in rows)))}
 latest = {a: max(r['snapshot_ts'] for r in rows if r['account_id'] == a) for a in accounts}
 shared = lambda r: r['stash_type'] == 'advanced' or r['stash_type'].startswith('shared')
+latest_shared_owner={a:min((r['char_name'] for r in rows if r['account_id']==a and shared(r) and r['snapshot_ts']==latest[a]),default=None) for a in accounts}
 stash_only = lambda r: r['stash_type']=='personal' or shared(r)
 include_inventory=os.environ.get('D2R_INCLUDE_INVENTORY')=='1'
 eligible=lambda r:stash_only(r) or (include_inventory and r['stash_type']=='inventory')
-current = [r for r in rows if eligible(r) and (not shared(r) or r['snapshot_ts'] == latest[r['account_id']])]
+current = [r for r in rows if eligible(r) and (not shared(r) or (r['snapshot_ts']==latest[r['account_id']] and r['char_name']==latest_shared_owner[r['account_id']]))]
 unknown_materials = [r for r in current if r['stash_type']=='advanced' and r['stack_count'] is None]
 selected = [r for r in current if r not in unknown_materials and (r['stack_count'] is None or r['stack_count'] > 0)]
 quality = {1:'Low quality',2:'Normal',3:'Superior',4:'Magic',5:'Set',6:'Rare',7:'Unique',8:'Crafted'}
@@ -141,13 +142,15 @@ chosen_keys={source_key(r) for r in selected}
 audit=[['Source reference','Account','Character','Location','Item','Unit ID','Captured UTC','Disposition','Reason']]
 older_tabs={}
 for r in rows:
-    if source_key(r) in chosen_keys: disposition='Included'; reason='Latest account-wide shared snapshot' if shared(r) else 'Character-owned record retained'
+    if source_key(r) in chosen_keys: disposition='Included'; reason='One consolidated latest account-wide shared snapshot' if shared(r) else 'Character-owned record retained'
     elif not eligible(r):
         disposition='Excluded character item'; reason='Equipped and mercenary items excluded; character inventory requires inclusion'
     elif r in unknown_materials or (r['stack_count'] is not None and r['stack_count'] <= 0):
         disposition='Excluded quantity'; reason='Missing or nonpositive material quantity; omitted from post and totals'
     else:
         disposition='Older shared observation'; reason='Not counted; shared data is recorded separately under multiple character snapshots'
+        if shared(r) and r['snapshot_ts']==latest[r['account_id']] and r['char_name']!=latest_shared_owner[r['account_id']]:
+            disposition='Duplicate shared observation';reason='Not counted; another character from the same account recorded the same latest shared snapshot'
         if not any(x['account_id']==r['account_id'] and x['stash_type']==r['stash_type'] for x in current):
             key=(r['account_id'],r['stash_type'])
             older_tabs[key]=max(older_tabs.get(key,''),r['snapshot_ts'])
@@ -276,7 +279,8 @@ Next step: review the remaining tooltip flags, then assign FG prices by post ref
 assert len(audit)-1==len(rows)
 assert len(set(r[0] for r in organized))==len(organized)
 assert len(selected)+sum(r[7]!='Included' for r in audit[1:])==len(rows)
-assert all(not shared(r) or r['snapshot_ts']==latest[r['account_id']] for r in selected)
+assert all(not shared(r) or (r['snapshot_ts']==latest[r['account_id']] and r['char_name']==latest_shared_owner[r['account_id']]) for r in selected)
+assert all(len({r['char_name'] for r in selected if r['account_id']==a and shared(r)})<=1 for a in accounts)
 assert all(r[18] is None and r[19] is None for r in organized)
 assert all(a not in '\n'.join(draft) for a in accounts)
 assert all(eligible(r) and r['stash_type'] not in {'equipped','merc'} for r in selected)
