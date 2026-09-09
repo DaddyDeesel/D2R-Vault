@@ -54,6 +54,14 @@ assert.deepEqual(logic.filter(searchItems,{query:'3os armor'}).map(logic.key),[]
 assert.deepEqual(logic.filter(searchItems,{query:'ethereal'}).map(logic.key),['eth']);
 assert.deepEqual(logic.filter(searchItems,{query:'resistance >= 30'}).map(logic.key),['hoz']);
 assert.equal(logic.filter(searchItems,{query:'herlad'}).at(0)?.key,'hoz');
+const charmPriceSearch=decodeURIComponent(logic.priceSearchURL({item:'Small Charm',rolls:'20 life / 5 all res',eth:false,sockets:0}));
+assert.ok(charmPriceSearch.includes('"Small Charm"'));
+assert.ok(charmPriceSearch.includes('"20 life"'));
+assert.ok(charmPriceSearch.includes('"5 all res"'));
+const basePriceSearch=decodeURIComponent(logic.priceSearchURL({item:'Superior Archon Plate',rolls:'15 ED%',eth:true,sockets:4}));
+assert.ok(basePriceSearch.includes('"ethereal"'));
+assert.ok(basePriceSearch.includes('"4 sockets"'));
+assert.ok(basePriceSearch.includes('"15 ED%"'));
 
 const hammerdin=logic.packageBuild(searchItems,'hammerdin');
 assert.equal(hammerdin.title,'Hammerdin');

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Price searches now include compact important rolls plus recorded ethereal and socket details, making results useful for charms, jewels, bases, rares, crafted items, and variable-roll uniques.
+
 ## v0.3.2 — 2026-09-09
 
 D2R Treasure Vault v0.3.2 corrects identified Set and Unique names while preserving conservative name inference for genuinely unidentified Unique items.

@@ -101,8 +101,17 @@ const VaultLogic=(()=>{
   }
   function priceLabel(price){return price?price.amount+' fg '+(price.basis==='lot'?'for listing':'each'):'Set price';}
   function priceSearchURL(item){
-    const name=String(item.item||item.base||item.name).replace(/ #\d+$/, '').replace(/["\r\n]/g,' ').trim();
-    const query='site:forums.d2jsp.org "D2:R RotW Softcore Ladder Trading" "'+name+'"';
+    const clean=value=>String(value||'').replace(/\[(?:\/?)(?:b|i|u|color)(?:=[^\]]*)?\]/gi,'').replace(/ #\d+$/,'').replace(/["\r\n]+/g,' ').replace(/\s+/g,' ').trim();
+    const name=clean(item.item||item.base||item.name);
+    const details=[];
+    if(item.eth)details.push('ethereal');
+    if(Number(item.sockets)>0)details.push(Number(item.sockets)+' sockets');
+    for(const roll of String(item.rolls||'').split(/\s*(?:\/|\||;|\r?\n)\s*/)){
+      const value=clean(roll);if(value&&value!=='—'&&!details.includes(value))details.push(value.slice(0,80));
+      if(details.length>=5)break;
+    }
+    const terms=[name,...details].filter(Boolean).map(value=>'"'+value+'"').join(' ');
+    const query='site:forums.d2jsp.org "D2:R RotW Softcore Ladder Trading" '+terms;
     return 'https://www.google.com/search?q='+encodeURIComponent(query);
   }
   function pricingSummary(items,selected,prices){

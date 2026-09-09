@@ -75,7 +75,7 @@ The first capture establishes a baseline. A removed item is absent from the late
 
 - Select individual listings or all matching filtered results.
 - Add manual FG prices per item or for the whole displayed quantity.
-- Open a targeted d2jsp price search beside each price control.
+- Open a targeted d2jsp price search beside each price control. Searches include the item name, important rolls, ethereal status, and socket count when recorded.
 - Generate an organized BBCode post.
 - Edit and preview bold, italic, underline, and color formatting.
 - Check the draft against d2jsp's observed 4,000-character and 20-color-tag limits with live counters. Copy and download stay disabled until over-limit or malformed BBCode is corrected.
