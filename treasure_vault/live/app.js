@@ -1,7 +1,7 @@
 'use strict';
 (()=>{
   const el=id=>document.getElementById(id);
-  const ui=Object.fromEntries(['connection-state','last-checked','refresh','collections','source-time','collection-title','result-count','search','character','category','select-matching','clear-selection','selected-only','selection-count','export','notice','export-panel','close-export','post-text','copy-post','download-post','export-status','item-detail','items','page-status','previous','next','format-bold','format-italic','format-underline','format-color','apply-color','rebuild-post','restore-draft','draft-warning','draft-warning-text','accept-draft','post-preview','composer-help','set-prices','price-summary','pricing-panel','close-pricing','bulk-price-editor','mule-summary','mule-list','all-mules','clear-mules','settings','settings-panel','close-settings','settings-form','database-path','browse-database','save-settings','settings-status','quantity-breakdown','changes-summary','changes-status','clear-changes','changes-list','changes-totals','changes-filters','log-include-inventory','log-settings-status','changes-scope','open-log','close-log','changes-panel','log-collection-list','log-all-collections','log-no-collections','item-type','item-quality','clear-refinements','refinement-heading','saved-search-count','save-search-form','saved-search-name','saved-search-list','saved-search-status','price-filter','download-trade-json','download-trade-csv','import-trade-list','trade-list-file','trade-list-status','open-package-builder','close-package-builder','package-panel','package-template','analyze-package','package-description','package-slots','package-status','copy-package','select-package','create-package-template','delete-package-template','new-package-form','new-package-name','new-package-description','cancel-package-template','custom-package-actions','add-selected-to-package','expand-template-options','collapse-template-options','post-main-header-enabled','post-main-header-fields','post-main-header','post-main-header-insert','post-main-header-preview','post-main-subtext-enabled','post-main-subtext-fields','post-main-subtext','post-main-subtext-insert','post-main-subtext-preview','post-category-templates','new-template-category','add-template-category','post-template-status'].map(id=>[id,el(id)]));
+  const ui=Object.fromEntries(['connection-state','last-checked','refresh','collections','source-time','collection-title','result-count','search','character','category','select-matching','clear-selection','selected-only','selection-count','export','notice','export-panel','close-export','post-text','copy-post','download-post','export-status','item-detail','items','page-status','previous','next','format-bold','format-italic','format-underline','format-color','apply-color','rebuild-post','restore-draft','draft-warning','draft-warning-text','accept-draft','post-preview','composer-help','jsp-limit-check','jsp-limit-summary','jsp-limit-errors','set-prices','price-summary','pricing-panel','close-pricing','bulk-price-editor','mule-summary','mule-list','all-mules','clear-mules','settings','settings-panel','close-settings','settings-form','database-path','browse-database','save-settings','settings-status','quantity-breakdown','changes-summary','changes-status','clear-changes','changes-list','changes-totals','changes-filters','log-include-inventory','log-settings-status','changes-scope','open-log','close-log','changes-panel','log-collection-list','log-all-collections','log-no-collections','item-type','item-quality','clear-refinements','refinement-heading','saved-search-count','save-search-form','saved-search-name','saved-search-list','saved-search-status','price-filter','download-trade-json','download-trade-csv','import-trade-list','trade-list-file','trade-list-status','open-package-builder','close-package-builder','package-panel','package-template','analyze-package','package-description','package-slots','package-status','copy-package','select-package','create-package-template','delete-package-template','new-package-form','new-package-name','new-package-description','cancel-package-template','custom-package-actions','add-selected-to-package','expand-template-options','collapse-template-options','post-main-header-enabled','post-main-header-fields','post-main-header','post-main-header-insert','post-main-header-preview','post-main-subtext-enabled','post-main-subtext-fields','post-main-subtext','post-main-subtext-insert','post-main-subtext-preview','post-category-templates','new-template-category','add-template-category','post-template-status'].map(id=>[id,el(id)]));
   let data={items:[],images:{},sectionHeaders:{},postHeader:''};let selected=new Set();let category='';let page=0;const pageSize=16;let busy=false;let downloadURL='';let detailKey=null;let knownVersion=null;let hasCurrentConnection=false;let connectionProblem=false;
   let draftStorage='d2r-treasure-vault-draft-v1';let draft=null;let backupDraft=null;let previewText=null;let downloadText=null;let savedState='';
   let priceStorage='d2r-treasure-vault-prices-v1';const prices=Object.create(null);
@@ -196,8 +196,8 @@
   function bbElement(text){
     const build=node=>{
       if(typeof node==='string')return document.createTextNode(node);
-      const tag={root:'div',b:'strong',i:'em',u:'u',center:'div',color:'span'}[node.tag];const element=document.createElement(tag);
-      if(node.tag==='center')element.className='bb-center';if(node.tag==='color')element.style.color=node.color;
+      const tag={root:'div',b:'strong',i:'em',u:'u',center:'div',color:'span',size:'span'}[node.tag];const element=document.createElement(tag);
+      if(node.tag==='center')element.className='bb-center';if(node.tag==='color')element.style.color=node.color;if(node.tag==='size')element.style.fontSize=Math.min(52,8+node.size*2.5)+'px';
       for(const child of node.children)element.append(build(child));return element;
     };
     return build(VaultLogic.parseBBCode(text));
@@ -229,17 +229,19 @@
     if(knownVersion===null)return;
     ensurePostTemplate();draft=VaultLogic.syncDraft(draft,VaultLogic.exportPost(data,selected,prices,postTemplate));
     const text=draft.text;
+    const compatibility=VaultLogic.analyzeJspPost(text);
     if(ui['post-text'].value!==text)ui['post-text'].value=text;
     renderPreview(text);
     if(downloadText!==text){
       if(downloadURL)URL.revokeObjectURL(downloadURL);downloadURL='';downloadText=text;
       if(text){downloadURL=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));ui['download-post'].href=downloadURL;}else ui['download-post'].removeAttribute('href');
     }
-    const allowed=!!text&&hasCurrentConnection&&!draft.stale;
+    const allowed=!!text&&hasCurrentConnection&&!draft.stale&&compatibility.valid;
     ui['copy-post'].disabled=!allowed;ui['download-post'].hidden=!allowed;
+    ui['jsp-limit-check'].classList.toggle('invalid',!compatibility.valid);ui['jsp-limit-summary'].textContent=compatibility.characters.toLocaleString()+' / '+compatibility.limits.characters.toLocaleString()+' characters · '+compatibility.colorTags+' / '+compatibility.limits.colorTags+' color tags · '+(compatibility.valid?'Ready to post':'Needs attention');ui['jsp-limit-errors'].replaceChildren(...compatibility.errors.map(error=>make('li',error)));ui['jsp-limit-errors'].hidden=!compatibility.errors.length;
     ui['draft-warning'].hidden=!draft.stale;ui['draft-warning-text'].textContent='The inventory, selection or prices changed. Your edits were kept. Review the draft and keep it, or rebuild from the current selection.';
     ui['accept-draft'].disabled=!hasCurrentConnection;ui['restore-draft'].hidden=!backupDraft;
-    ui['export-status'].textContent=!hasCurrentConnection?'Reconnect to the stash before exporting.':draft.stale?'Review inventory changes before exporting.':text?(draft.dirty?'Edited draft':'Generated draft')+' · '+selected.size+' selected listings · '+text.length.toLocaleString()+' characters':'Select a treasure to begin.';
+    ui['export-status'].textContent=!hasCurrentConnection?'Reconnect to the stash before exporting.':draft.stale?'Review inventory changes before exporting.':!compatibility.valid?'Fix the d2jsp compatibility issues before copying or downloading.':text?(draft.dirty?'Edited draft':'Generated draft')+' · '+selected.size+' selected listings · '+text.length.toLocaleString()+' characters':'Select a treasure to begin.';
     saveDraft();
   }
   function tradeListControls(){ui['download-trade-json'].disabled=!selected.size;ui['download-trade-csv'].disabled=!selected.size;ui['import-trade-list'].disabled=knownVersion===null||!data.items.length;ui['trade-list-status'].textContent=tradeListStatus||(selected.size?'Ready to back up '+selected.size+' selected listing'+(selected.size===1?'':'s')+'.':'Select listings in the vault to create a backup.');}
@@ -344,6 +346,7 @@
   ui['post-text'].addEventListener('input',()=>{if(!draft)return;draft={...draft,text:ui['post-text'].value,dirty:ui['post-text'].value!==draft.base};exportText();});
   function applyFormat(tag){
     const editor=ui['post-text'];const result=VaultLogic.formatSelection(editor.value,editor.selectionStart,editor.selectionEnd,tag,ui['format-color'].value);
+    const compatibility=VaultLogic.analyzeJspPost(result.text);if(!compatibility.valid){ui['composer-help'].textContent=compatibility.errors[0]+' Formatting was not applied.';return;}
     draft={...draft,text:result.text,dirty:result.text!==draft.base};exportText();editor.focus();editor.setSelectionRange(result.start,result.end);
   }
   ui['format-bold'].onclick=()=>applyFormat('b');ui['format-italic'].onclick=()=>applyFormat('i');ui['format-underline'].onclick=()=>applyFormat('u');ui['apply-color'].onclick=()=>applyFormat('color');

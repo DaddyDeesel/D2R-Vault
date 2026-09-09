@@ -123,25 +123,51 @@ const VaultLogic=(()=>{
       for(const item of categoryItems){
         if(category==='Gems'){const next=item.item.split(' ').at(-1);if(next!==gem){lines.push('','[b]'+next+'[/b]');gem=next;}}
         const price=prices[key(item)];
-        lines.push(item.postLine+(price?' — [b][color=gold]'+priceLabel(price)+'[/color][/b]':''));
+        lines.push(item.postLine+(price?' — [b]'+priceLabel(price)+'[/b]':''));
       }
       blocks.push(lines.join('\n'));
     }
     return blocks.join('\n\n')+'\n';
   }
   const allowedColors=new Set(['gold','green','blue','red','purple','orange','teal','white','gray','grey','yellow','black','navy','silver','maroon','lime','aqua','fuchsia','pink']);
+  const jspLimits=Object.freeze({characters:4000,colorTags:20,sizeMin:0,sizeMax:23});
   function colorValue(value){const color=String(value||'').trim().toLowerCase();return allowedColors.has(color)||/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/.test(color)?color:null;}
+  function analyzeJspPost(text){
+    text=String(text||'');const errors=[];const stack=[];let colorTags=0;
+    const tokens=/\[(\/?)(b|i|u|center|color|size)(?:=([^\]\r\n]*))?\]/gi;
+    for(const match of text.matchAll(tokens)){
+      const closing=!!match[1],tag=match[2].toLowerCase(),value=match[3];
+      if(closing){
+        if(value!==undefined||stack.at(-1)!==tag)errors.push('BBCode tags must be closed in reverse order; check '+match[0]+'.');
+        else stack.pop();
+        continue;
+      }
+      if(tag==='color'){
+        colorTags++;
+        if(!colorValue(value))errors.push('Use a supported color name or a 3/6-digit hex color.');
+      }else if(tag==='size'){
+        const size=Number(value);
+        if(value===undefined||!Number.isInteger(size)||size<jspLimits.sizeMin||size>jspLimits.sizeMax)errors.push('Text size must be a whole number from 0 through 23.');
+      }else if(value!==undefined)errors.push('Only color and size tags accept a value.');
+      stack.push(tag);
+    }
+    if(stack.length)errors.push('Close every BBCode tag. Still open: '+stack.slice().reverse().map(tag=>'['+tag+']').join(', ')+'.');
+    if(text.length>jspLimits.characters)errors.push('Post is '+(text.length-jspLimits.characters).toLocaleString('en-US')+' characters over the observed d2jsp limit.');
+    if(colorTags>jspLimits.colorTags)errors.push('Post uses '+colorTags+' color tags; d2jsp currently renders only about '+jspLimits.colorTags+' reliably.');
+    return{characters:text.length,colorTags,errors:[...new Set(errors)],valid:errors.length===0,limits:jspLimits};
+  }
   function parseBBCode(text){
-    const root={tag:'root',children:[]};const stack=[root];let previous=0;
-    const tokens=/\[(\/?)(b|i|u|center|color)(?:=([^\]\r\n]*))?\]/gi;
+    const root={tag:'root',children:[]};const stack=[root];let previous=0,colorTags=0;
+    const tokens=/\[(\/?)(b|i|u|center|color|size)(?:=([^\]\r\n]*))?\]/gi;
     const literal=value=>{if(value)stack.at(-1).children.push(value);};
     for(const match of text.matchAll(tokens)){
       literal(text.slice(previous,match.index));previous=match.index+match[0].length;
       const closing=!!match[1],tag=match[2].toLowerCase();
       if(closing){if(!match[3]&&stack.length>1&&stack.at(-1).tag===tag)stack.pop();else literal(match[0]);continue;}
-      const color=tag==='color'?colorValue(match[3]):null;
-      if(stack.length>=64||(tag==='color'&&!color)||(tag!=='color'&&match[3]!==undefined)){literal(match[0]);continue;}
-      const node={tag,color,children:[]};stack.at(-1).children.push(node);stack.push(node);
+      const color=tag==='color'?colorValue(match[3]):null,size=tag==='size'?Number(match[3]):null;
+      if(tag==='color')colorTags++;
+      if(stack.length>=64||(tag==='color'&&(!color||colorTags>jspLimits.colorTags))||(tag==='size'&&(!Number.isInteger(size)||size<jspLimits.sizeMin||size>jspLimits.sizeMax))||(!['color','size'].includes(tag)&&match[3]!==undefined)){literal(match[0]);continue;}
+      const node={tag,color,size,children:[]};stack.at(-1).children.push(node);stack.push(node);
     }
     literal(text.slice(previous));return root;
   }
@@ -224,5 +250,5 @@ const VaultLogic=(()=>{
     }
     return{id:typeof templateOrId==='string'?templateOrId:template.id,title:template.title,description:template.description,slots};
   }
-  return{key,itemType,characters,ownershipLabel,locationLabel,isMaterial,isShared,filter,searchPlan,reconcile,muleOptions,inventoryScope,exportPost,priceEntry,priceLabel,pricingSummary,priceSearchURL,colorValue,parseBBCode,formatSelection,syncDraft,tradeList,tradeListCSV,readTradeList,restoreTradeList,packageTemplateList,packageKind,packageBuild};
+  return{key,itemType,characters,ownershipLabel,locationLabel,isMaterial,isShared,filter,searchPlan,reconcile,muleOptions,inventoryScope,exportPost,priceEntry,priceLabel,pricingSummary,priceSearchURL,colorValue,jspLimits,analyzeJspPost,parseBBCode,formatSelection,syncDraft,tradeList,tradeListCSV,readTradeList,restoreTradeList,packageTemplateList,packageKind,packageBuild};
 })();

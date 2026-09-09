@@ -109,10 +109,11 @@
             <button id="restore-draft" class="button quiet" type="button" hidden>Undo rebuild</button>
           </div>
           <p id="composer-help" class="composer-hint">Highlight text in the editor, then apply formatting. Your edits are saved in this browser.</p>
+          <div id="jsp-limit-check" class="jsp-limit-check" aria-live="polite"><strong>d2jsp compatibility</strong><span id="jsp-limit-summary">0 / 4,000 characters · 0 / 20 color tags</span><ul id="jsp-limit-errors" hidden></ul></div>
           <div id="draft-warning" class="notice" hidden><span id="draft-warning-text"></span> <button id="accept-draft" class="button" type="button">Keep reviewed draft</button></div>
           <div class="composer-grid">
             <div><label for="post-text" class="composer-label">EDIT POST · BBCODE</label><textarea id="post-text" rows="15" spellcheck="false"></textarea></div>
-            <div><h4 class="composer-label">FORMATTED PREVIEW</h4><div id="post-preview" class="post-preview" role="region" aria-label="Formatted post preview"></div><p class="composer-hint">Approximate preview; d2jsp may use different fonts and spacing.</p></div>
+            <div><h4 class="composer-label">FORMATTED PREVIEW</h4><div id="post-preview" class="post-preview" role="region" aria-label="Formatted post preview"></div><p class="composer-hint">Approximate preview. Color tags after the current 20-tag compatibility limit appear as raw BBCode, matching reported d2jsp behavior.</p></div>
           </div>
           <div class="panel-footer"><span id="export-status" role="status"></span><div><button id="copy-post" class="button" type="button">Copy post</button><a id="download-post" class="button primary" download="d2jsp-selected-treasures.txt">Download .txt</a></div></div>
         </section>
@@ -121,7 +122,7 @@
         <footer class="pagination"><span id="page-status"></span><div><button id="previous" class="button quiet" type="button" disabled>← Previous</button><button id="next" class="button quiet" type="button" disabled>Next →</button></div></footer>
       </section>
     </div>
-    <footer class="vault-footer"><span id="sync-description">Checks the stash every 5 seconds while this tool is running.</span><span>D2R Treasure Vault v0.3.1 · Your asking prices in FG</span></footer>
+    <footer class="vault-footer"><span id="sync-description">Checks the stash every 5 seconds while this tool is running.</span><span>D2R Treasure Vault v0.3.2 · Your asking prices in FG</span></footer>
   </main>
 </body>
 </html>

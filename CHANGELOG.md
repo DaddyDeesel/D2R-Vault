@@ -1,10 +1,19 @@
 # Changelog
 
-## Unreleased
+## v0.3.2 — 2026-09-09
+
+D2R Treasure Vault v0.3.2 corrects identified Set and Unique names while preserving conservative name inference for genuinely unidentified Unique items.
+
+### Added
+
+- Live d2jsp compatibility checks for the observed 4,000-character post limit and 20-color-tag rendering cap.
+- BBCode validation for balanced nesting, supported colors, and d2jsp text sizes from 0 through 23. Invalid drafts remain editable but cannot be copied or downloaded until corrected.
+- Preview behavior that exposes color markup beyond the current cap before a user pastes the post into d2jsp.
 
 ### Fixed
 
 - Restricted unidentified Unique name inference to records with Unique quality that are actually unidentified. This prevents identified Set and Unique items from being renamed through an overlapping `unique_set_id` entry while preserving inferred names for genuine unidentified uniques.
+- Removed per-item price colors from generated sale posts so the limited color budget remains available for section headings.
 
 ## v0.3.1 — 2026-09-04
 
