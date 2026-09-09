@@ -44,9 +44,12 @@ unique_by_code=collections.defaultdict(list)
 for definition in unique.values():
     if definition.get('code') and definition.get('index') and not definition.get('disabled'): unique_by_code[definition['code']].append(definition)
 def unique_definition(r):
+    # Unique and Set definitions share the source ID field. Only infer a Unique
+    # name for an unidentified Unique; otherwise an overlapping Set ID can be
+    # resolved against the wrong definition table.
+    if r.get('quality')!=7 or r.get('identified'):return None
     exact=unique.get(str(r.get('unique_set_id') or ''))
     if exact:return exact
-    if r.get('quality')!=7 or r.get('identified'):return None
     matches=unique_by_code.get(base_code_by_name.get(normalize(r.get('base_name','')),''),[])
     return matches[0] if len(matches)==1 else None
 unidentified_names={}

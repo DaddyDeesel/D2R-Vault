@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Restricted unidentified Unique name inference to records with Unique quality that are actually unidentified. This prevents identified Set and Unique items from being renamed through an overlapping `unique_set_id` entry while preserving inferred names for genuine unidentified uniques.
+
 ## v0.3.1 — 2026-09-04
 
 D2R Treasure Vault v0.3.1 expands search and sale-post customization while making account and mule boundaries explicit.
